@@ -12,22 +12,31 @@ try {
   d2ioTopics = JSON.parse(readFileSync(path.join(__dirname, '..', 'data', 'd2io-topics.json'), 'utf-8'));
 } catch { /* will be populated on first use */ }
 
+// diablo2.io stat filter URL param mapping
+const D2IO_STAT_PARAMS = {
+  mf: 'magicfind', ed: 'ed', fcr: 'fcr', frw: 'frw',
+  fhr: 'fhr', ias: 'ias', allRes: 'resists', life: 'life', mana: 'mana',
+};
+
+// Traderie property ID mapping (stat key → prop ID)
+const TRADERIE_PROPS = {
+  allSkills: 587, allRes: 441, fireRes: 427, coldRes: 426,
+  lightRes: 428, poisonRes: 401, life: 418, mana: 400,
+  mf: 461, ias: 457, ed: 510, fhr: 430, pdr: 413,
+};
+
 /**
- * Look up price data from diablo2.io, D2Trader.net, and ChaossCube
- * @param {string} itemNameEn - English item name (e.g. "War Traveler")
- * @param {string} baseTypeEn - English base type (e.g. "Battle Boots")
- * @param {object} stats - Parsed stats from the item
- * @param {object} options - { ladder, itemNameKo, ethereal, sockets }
+ * Look up price data from diablo2.io, D2Trader.net, ChaossCube + generate Traderie link
  */
 export async function lookupPrice(itemNameEn, baseTypeEn, stats, options = {}) {
-  const { ladder = false, itemNameKo, ethereal, sockets } = options;
+  const { ladder = false, itemNameKo, baseTypeKo, ethereal, sockets } = options;
 
   const lookups = [
-    lookupD2io(itemNameEn, ladder),
-    lookupD2Trader(itemNameEn),
+    lookupD2io(itemNameEn, { ladder, ethereal, sockets }),
+    lookupD2Trader(itemNameEn, { ethereal }),
   ];
-  if (itemNameKo) {
-    lookups.push(lookupChaoscube(itemNameKo, ladder, { ethereal, sockets }));
+  if (itemNameKo || baseTypeKo) {
+    lookups.push(lookupChaoscube(itemNameKo, baseTypeKo, ladder, { ethereal, sockets }));
   }
 
   const results = await Promise.allSettled(lookups);
@@ -36,25 +45,54 @@ export async function lookupPrice(itemNameEn, baseTypeEn, stats, options = {}) {
   const d2trader = results[1].status === 'fulfilled' ? results[1].value : { error: results[1].reason?.message };
   const chaoscube = results[2]?.status === 'fulfilled' ? results[2].value : (results[2] ? { error: results[2].reason?.message } : { error: '한국어 아이템명 없음' });
 
-  // Combine stat range comparison from D2Trader
+  // Generate Traderie filtered URL
+  const traderie = {
+    url: generateTraderieUrl(itemNameEn, { ladder, ethereal, sockets, stats }),
+  };
+
+  // Generate d2io filtered URL with stat params (for user to click)
+  if (d2io.url && stats) {
+    d2io.filteredUrl = buildD2ioFilteredUrl(d2io.url, stats);
+  }
+
+  // Stat comparison from D2Trader
   let statComparison = null;
   if (d2trader.itemAttrs && stats) {
     statComparison = compareStats(stats, d2trader.itemAttrs);
   }
 
-  return {
-    itemNameEn,
-    d2io,
-    d2trader,
-    chaoscube,
-    statComparison,
-  };
+  return { itemNameEn, d2io, d2trader, chaoscube, traderie, statComparison };
+}
+
+// --- Traderie link generation ---
+
+function generateTraderieUrl(itemNameEn, options = {}) {
+  const { ladder, ethereal, sockets, stats } = options;
+  const params = new URLSearchParams();
+  params.set('search', itemNameEn);
+  params.set('prop_Platform', 'PC');
+  params.set('prop_Mode', 'softcore');
+  if (ladder) params.set('prop_Ladder', 'true');
+  if (ethereal) params.set('prop_Ethereal', 'true');
+  if (sockets != null && sockets > 0) {
+    params.set('prop_402Min', String(sockets));
+    params.set('prop_402Max', String(sockets));
+  }
+  if (stats) {
+    for (const [key, stat] of Object.entries(stats)) {
+      if (stat.value === undefined || key === 'sockets') continue;
+      const propId = TRADERIE_PROPS[key];
+      if (propId) params.set(`prop_${propId}Min`, String(stat.value));
+    }
+  }
+  return `https://traderie.com/diablo2resurrected/products?${params}`;
 }
 
 // --- diablo2.io ---
 
-async function lookupD2io(itemNameEn, ladder = false) {
-  // Look up topic ID from the cached mapping
+async function lookupD2io(itemNameEn, options = {}) {
+  const { ladder = false, ethereal, sockets } = options;
+
   let pricecheckId = d2ioTopics[itemNameEn];
 
   // Try case-insensitive search if not found
@@ -78,9 +116,15 @@ async function lookupD2io(itemNameEn, ladder = false) {
     return { error: 'diablo2.io에서 아이템을 찾을 수 없습니다', searchUrl: `https://diablo2.io/database/?q=${encodeURIComponent(itemNameEn)}` };
   }
 
-  // Step 2: Fetch pricecheck page
-  const ladderParam = ladder ? '1' : '0';
-  const pcUrl = `https://diablo2.io/pricecheck.php?item=${pricecheckId}&ladder=${ladderParam}&legacy_resu=2`;
+  // Build URL with ethereal/socket filter params
+  const params = new URLSearchParams();
+  params.set('item', String(pricecheckId));
+  params.set('ladder', ladder ? '1' : '0');
+  params.set('legacy_resu', '2');
+  if (ethereal) params.set('eth', '1');
+  if (sockets != null && sockets > 0) params.set('imaxsockets', String(sockets));
+
+  const pcUrl = `https://diablo2.io/pricecheck.php?${params}`;
 
   const res = await fetch(pcUrl, { headers: { 'User-Agent': USER_AGENT }, timeout: 10000 });
   const html = await res.text();
@@ -94,6 +138,23 @@ async function lookupD2io(itemNameEn, ladder = false) {
     tradeCount: trades.length,
     priceRange: summarizePrices(trades),
   };
+}
+
+/**
+ * Build d2io URL with stat filters included (for user to click and refine)
+ */
+function buildD2ioFilteredUrl(baseUrl, stats) {
+  try {
+    const url = new URL(baseUrl);
+    for (const [key, paramName] of Object.entries(D2IO_STAT_PARAMS)) {
+      if (stats[key]?.value) {
+        url.searchParams.set(paramName, String(stats[key].value));
+      }
+    }
+    return url.toString();
+  } catch {
+    return baseUrl;
+  }
 }
 
 async function refreshD2ioTopics() {
@@ -237,7 +298,8 @@ function summarizePrices(trades) {
 
 // --- D2Trader.net ---
 
-async function lookupD2Trader(itemNameEn) {
+async function lookupD2Trader(itemNameEn, options = {}) {
+  const { ethereal } = options;
   const slug = itemNameEn.toLowerCase()
     .replace(/['']s\b/g, 's')  // possessive: 's → s
     .replace(/['']/g, '')       // other apostrophes
@@ -250,31 +312,20 @@ async function lookupD2Trader(itemNameEn) {
 
   const attempts = categories.map(async cat => {
     const prefix = cat === 'runeword' ? 'item/runeword' : `item/${cat}`;
-    const url = `https://d2trader.net/${prefix}/${slug}-price/`;
 
-    const res = await fetch(url, {
-      headers: { 'User-Agent': USER_AGENT },
-      redirect: 'follow',
-      timeout: 8000,
-    });
-    if (!res.ok) throw new Error('not found');
+    // If ethereal, try ethereal variant first
+    if (ethereal) {
+      try {
+        const ethUrl = `https://d2trader.net/${prefix}/ethereal-${slug}-price/`;
+        const result = await fetchD2TraderPage(ethUrl, cat);
+        result.isEthereal = true;
+        return result;
+      } catch {
+        // Fall through to normal variant
+      }
+    }
 
-    const html = await res.text();
-    const match = html.match(/<script id="__NEXT_DATA__"[^>]*>(.*?)<\/script>/);
-    if (!match) throw new Error('no data');
-
-    const nextData = JSON.parse(match[1]);
-    const page = nextData?.props?.pageProps?.page;
-    if (!page) throw new Error('no page');
-
-    return {
-      url,
-      itemName: page.item_name,
-      itemPrice: page.item_price,
-      itemAttrs: page.item_details?.item_attrs || [],
-      itemVariants: page.item_variants || [],
-      category: cat,
-    };
+    return fetchD2TraderPage(`https://d2trader.net/${prefix}/${slug}-price/`, cat);
   });
 
   const results = await Promise.allSettled(attempts);
@@ -286,6 +337,32 @@ async function lookupD2Trader(itemNameEn) {
   return { error: 'D2Trader.net에서 아이템을 찾을 수 없습니다' };
 }
 
+async function fetchD2TraderPage(url, cat) {
+  const res = await fetch(url, {
+    headers: { 'User-Agent': USER_AGENT },
+    redirect: 'follow',
+    timeout: 8000,
+  });
+  if (!res.ok) throw new Error('not found');
+
+  const html = await res.text();
+  const match = html.match(/<script id="__NEXT_DATA__"[^>]*>(.*?)<\/script>/);
+  if (!match) throw new Error('no data');
+
+  const nextData = JSON.parse(match[1]);
+  const page = nextData?.props?.pageProps?.page;
+  if (!page) throw new Error('no page');
+
+  return {
+    url,
+    itemName: page.item_name,
+    itemPrice: page.item_price,
+    itemAttrs: page.item_details?.item_attrs || [],
+    itemVariants: page.item_variants || [],
+    category: cat,
+  };
+}
+
 // --- ChaossCube (chaoscube.co.kr) ---
 
 const CC_API = 'https://api.chaoscube.co.kr';
@@ -295,7 +372,30 @@ const CC_WEB = 'https://www.chaoscube.co.kr';
 const ccBindingCache = new Map();
 const CC_CACHE_TTL = 10 * 60 * 1000;
 
-async function lookupChaoscube(itemNameKo, ladder = false, filters = {}) {
+/**
+ * Search ChaossCube: try unique name first, fall back to base type name
+ */
+async function lookupChaoscube(itemNameKo, baseTypeKo, ladder = false, filters = {}) {
+  // Try unique name first
+  if (itemNameKo) {
+    const result = await searchChaoscube(itemNameKo, ladder, filters);
+    if (result.priceRange || (result.listings && result.listings.length > 0)) {
+      return result;
+    }
+  }
+
+  // Fall back to base type name if unique name didn't find anything
+  if (baseTypeKo && baseTypeKo !== itemNameKo) {
+    const result = await searchChaoscube(baseTypeKo, ladder, filters);
+    if (result.priceRange || (result.listings && result.listings.length > 0)) {
+      return result;
+    }
+  }
+
+  return { error: 'ChaossCube에서 아이템을 찾을 수 없습니다' };
+}
+
+async function searchChaoscube(keyword, ladder = false, filters = {}) {
   const { ethereal, sockets } = filters;
   const searchConfig = {
     d2REXGameType: 'REIGN_OF_THE_WARLOCK',
@@ -308,12 +408,12 @@ async function lookupChaoscube(itemNameKo, ladder = false, filters = {}) {
     pageable: { page: 0, size: 30 },
     sortable: { column: 'create_date', direction: 'DESC' },
     socketCounts: sockets ? [sockets] : [],
-    keyword: itemNameKo,
+    keyword,
   };
   if (ethereal) searchConfig.isEthereal = true;
 
   // Step 1: Create search params → get binding key (with cache)
-  const cacheKey = `${itemNameKo}:${ladder}:s${sockets || ''}:e${ethereal || ''}`;
+  const cacheKey = `${keyword}:${ladder}:s${sockets || ''}:e${ethereal || ''}`;
   const cached = ccBindingCache.get(cacheKey);
   let bindingKey;
 
@@ -365,7 +465,7 @@ async function lookupChaoscube(itemNameKo, ladder = false, filters = {}) {
   }
 
   // Filter: only keep items whose name/preset/tags actually contain the keyword
-  const kw = itemNameKo.toLowerCase();
+  const kw = keyword.toLowerCase();
   const matched = d.items.filter(item => {
     const fields = [item.name, item.preset, item.title, ...(item.tags || [])].filter(Boolean);
     return fields.some(f => f.toLowerCase().includes(kw));

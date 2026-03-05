@@ -41,9 +41,9 @@ app.post('/api/identify', async (req, res) => {
 // Price: look up price from external sites
 app.post('/api/price', async (req, res) => {
   try {
-    const { itemNameEn, itemNameKo, baseTypeEn, stats, ladder, ethereal, sockets } = req.body;
+    const { itemNameEn, itemNameKo, baseTypeEn, baseTypeKo, stats, ladder, ethereal, sockets } = req.body;
     if (!itemNameEn) return res.status(400).json({ error: '아이템 이름이 없습니다' });
-    const priceData = await lookupPrice(itemNameEn, baseTypeEn, stats, { ladder: !!ladder, itemNameKo, ethereal, sockets });
+    const priceData = await lookupPrice(itemNameEn, baseTypeEn, stats, { ladder: !!ladder, itemNameKo, baseTypeKo, ethereal, sockets });
     res.json(priceData);
   } catch (err) {
     console.error('Price lookup error:', err);

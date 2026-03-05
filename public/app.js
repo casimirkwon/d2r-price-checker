@@ -138,6 +138,7 @@ identifyBtn.addEventListener('click', async () => {
         itemNameEn: searchName,
         itemNameKo: item.itemNameKo || item.baseTypeKo,
         baseTypeEn: item.baseTypeEn,
+        baseTypeKo: item.baseTypeKo || null,
         stats: item.stats,
         ladder: ladderToggle.checked,
         ethereal: item.ethereal || false,
@@ -287,7 +288,9 @@ function renderPriceInfo(data, itemName) {
   const encodedName = encodeURIComponent(itemName);
   let linksHtml = '';
 
-  if (d2io.url) {
+  if (d2io.filteredUrl) {
+    linksHtml += `<a href="${d2io.filteredUrl}" target="_blank" class="link-item">diablo2.io 시세 (필터)</a>`;
+  } else if (d2io.url) {
     linksHtml += `<a href="${d2io.url}" target="_blank" class="link-item">diablo2.io 시세</a>`;
   }
   linksHtml += `<a href="https://diablo2.io/database/?q=${encodedName}" target="_blank" class="link-item">diablo2.io DB</a>`;
@@ -300,7 +303,12 @@ function renderPriceInfo(data, itemName) {
     linksHtml += `<a href="${cc.url}" target="_blank" class="link-item">카오스큐브</a>`;
   }
 
-  linksHtml += `<a href="https://traderie.com/diablo2resurrected/products?search=${encodedName}" target="_blank" class="link-item">Traderie</a>`;
+  const traderie = data.traderie || {};
+  if (traderie.url) {
+    linksHtml += `<a href="${traderie.url}" target="_blank" class="link-item">Traderie (필터)</a>`;
+  } else {
+    linksHtml += `<a href="https://traderie.com/diablo2resurrected/products?search=${encodedName}" target="_blank" class="link-item">Traderie</a>`;
+  }
 
   linkList.innerHTML = linksHtml;
 }
