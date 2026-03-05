@@ -283,6 +283,60 @@ textarea:focus {
   font-size: 16px;
 }
 
+/* Perfect Analysis */
+.perfect-analysis {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 12px 16px;
+  border-radius: 8px;
+  margin-bottom: 16px;
+  background: #16213e;
+  border-left: 4px solid #666;
+}
+
+.perfect-analysis.grade-perfect {
+  border-left-color: #4ade80;
+  background: rgba(74, 222, 128, 0.1);
+}
+
+.perfect-analysis.grade-high {
+  border-left-color: #c4a24f;
+  background: rgba(196, 162, 79, 0.1);
+}
+
+.perfect-analysis.grade-mid {
+  border-left-color: #6ba3f7;
+}
+
+.perfect-analysis.grade-low {
+  border-left-color: #f87171;
+}
+
+.grade-badge {
+  font-size: 28px;
+  font-weight: 800;
+  min-width: 50px;
+  text-align: center;
+}
+
+.grade-perfect .grade-badge { color: #4ade80; }
+.grade-high .grade-badge { color: #c4a24f; }
+.grade-mid .grade-badge { color: #6ba3f7; }
+.grade-low .grade-badge { color: #f87171; }
+
+.grade-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 13px;
+  color: #aaa;
+}
+
+.grade-detail strong {
+  color: #e0e0e0;
+}
+
 /* Stat Comparison Bars */
 .stat-bar-item {
   margin-bottom: 10px;

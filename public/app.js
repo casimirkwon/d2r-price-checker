@@ -274,10 +274,25 @@ function renderPriceInfo(data, itemName) {
     renderMarketTable(mc);
   }
 
-  // --- Stat quality bars (D2Trader) ---
+  // --- Perfect analysis & Stat quality bars ---
+  const pa = data.perfectAnalysis;
   if (data.statComparison && data.statComparison.length > 0) {
     statComparison.classList.remove('hidden');
     let barsHtml = '';
+
+    // Perfect analysis summary
+    if (pa) {
+      const gradeClass = pa.isPerfect ? 'grade-perfect' : pa.avgQuality >= 90 ? 'grade-high' : pa.avgQuality >= 70 ? 'grade-mid' : 'grade-low';
+      barsHtml += `
+        <div class="perfect-analysis ${gradeClass}">
+          <div class="grade-badge">${pa.grade}</div>
+          <div class="grade-detail">
+            <span>평균 품질 <strong>${pa.avgQuality}%</strong></span>
+            <span>으뜸 ${pa.perfectCount}/${pa.totalStats}개</span>
+          </div>
+        </div>`;
+    }
+
     for (const sc of data.statComparison) {
       const cls = sc.quality >= 100 ? 'perfect' : sc.quality >= 70 ? 'high' : sc.quality >= 40 ? 'mid' : 'low';
       barsHtml += `

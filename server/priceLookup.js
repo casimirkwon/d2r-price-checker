@@ -6,6 +6,13 @@ import { fileURLToPath } from 'url';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const USER_AGENT = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36';
 
+// Local item database (stat ranges for uniques, sets, runewords)
+let itemDb = {};
+try {
+  itemDb = JSON.parse(readFileSync(path.join(__dirname, '..', 'data', 'item-db.json'), 'utf-8'));
+  console.log(`Loaded item DB: ${Object.keys(itemDb).length} items`);
+} catch { /* will work without it */ }
+
 // diablo2.io topic ID mapping (item name → topic ID = pricecheck ID)
 let d2ioTopics = {};
 try {
@@ -43,7 +50,9 @@ const STAT_LABELS = {
   life: '생명력', mana: '마나', cb: '크러싱', thorns: '반사피해',
   pdr: '물리감소%', lifeLeech: '생흡%', manaLeech: '마흡%',
   slowerStamina: '지구력', defense: '방어력', addsDmg: '추가피해', minDmg: '최소피해', maxDmg: '최대피해',
-  enemyLightRes: '적번저', enemyFireRes: '적화저', enemyColdRes: '적냉저',
+  enemyLightRes: '적번저', enemyFireRes: '적화저', enemyColdRes: '적냉저', enemyPoisonRes: '적독저',
+  lifePerKill: '킬당생명', manaPerKill: '킬당마나',
+  coldAbsorb: '냉흡수', fireAbsorb: '화흡수', lightAbsorb: '번흡수',
 };
 
 /**
@@ -76,10 +85,17 @@ export async function lookupPrice(itemNameEn, baseTypeEn, stats, options = {}) {
     d2io.filteredUrl = buildD2ioFilteredUrl(d2io.url, { stats, ethereal, sockets });
   }
 
-  // Stat comparison from D2Trader ranges
+  // Stat quality comparison: prefer local DB, fallback to D2Trader
   let statComparison = null;
-  if (d2trader.itemAttrs && stats) {
-    statComparison = compareStats(stats, d2trader.itemAttrs);
+  let perfectAnalysis = null;
+  if (stats) {
+    const localResult = compareWithLocalDb(itemNameEn, stats);
+    if (localResult) {
+      statComparison = localResult.comparison;
+      perfectAnalysis = localResult.perfectAnalysis;
+    } else if (d2trader.itemAttrs) {
+      statComparison = compareStats(stats, d2trader.itemAttrs);
+    }
   }
 
   // Market comparison: compare user's item against CC listings
@@ -88,7 +104,7 @@ export async function lookupPrice(itemNameEn, baseTypeEn, stats, options = {}) {
     marketComparison = buildMarketComparison(chaoscube.listings, stats, { ethereal, sockets });
   }
 
-  return { itemNameEn, d2io, d2trader, chaoscube, traderie, statComparison, marketComparison };
+  return { itemNameEn, d2io, d2trader, chaoscube, traderie, statComparison, perfectAnalysis, marketComparison };
 }
 
 // --- Traderie link generation ---
@@ -638,7 +654,142 @@ function buildMarketComparison(listings, userStats, userProps = {}) {
   };
 }
 
-// --- Stat Comparison (D2Trader ranges) ---
+// --- Stat Quality / Perfect Analysis (Local DB) ---
+
+// Map D2Trader placeholder keywords to our stat keys
+const PLACEHOLDER_TO_KEY = {
+  'Enhanced Defense': 'ed',
+  'Enhanced Damage': 'ed',
+  'Faster Run/Walk': 'frw',
+  'Better Chance': 'mf',
+  'Magic Find': 'mf',
+  'All Skills': 'allSkills',
+  'All Resistances': 'allRes',
+  'Faster Cast Rate': 'fcr',
+  'Increased Attack Speed': 'ias',
+  'Faster Hit Recovery': 'fhr',
+  'Strength': 'str',
+  'Vitality': 'vit',
+  'Dexterity': 'dex',
+  'Energy': 'energy',
+  'to Life': 'life',
+  'to Mana': 'mana',
+  'Attacker Takes': 'thorns',
+  'Crushing Blow': 'cb',
+  'Life Stolen': 'lifeLeech',
+  'Mana Stolen': 'manaLeech',
+  'Fire Resist': 'fireRes',
+  'Cold Resist': 'coldRes',
+  'Lightning Resist': 'lightRes',
+  'Poison Resist': 'poisonRes',
+  'Damage Reduced': 'pdr',
+  'All Attributes': 'allAttr',
+  'Defense (Based on': 'defense',
+  'Defense:': 'defense',
+  '+# Defense': 'defense',
+  'Damage +': 'addsDmg',
+  'Enemy Poison Resist': 'enemyPoisonRes',
+  'Enemy Fire Resist': 'enemyFireRes',
+  'Enemy Cold Resist': 'enemyColdRes',
+  'Enemy Lightning Resist': 'enemyLightRes',
+  'Life after each Kill': 'lifePerKill',
+  'Mana after each Kill': 'manaPerKill',
+  'Absorbs Cold': 'coldAbsorb',
+  'Absorbs Fire': 'fireAbsorb',
+  'Absorbs Lightning': 'lightAbsorb',
+  'Maximum Damage': 'maxDmg',
+  'Minimum Damage': 'minDmg',
+};
+
+function placeholderToStatKey(placeholder) {
+  for (const [keyword, key] of Object.entries(PLACEHOLDER_TO_KEY)) {
+    if (placeholder.includes(keyword)) return key;
+  }
+  return null;
+}
+
+/**
+ * Compare user's item stats against local item DB ranges.
+ * Returns stat quality comparison and perfect analysis.
+ */
+function compareWithLocalDb(itemNameEn, userStats) {
+  if (!itemNameEn || !itemDb[itemNameEn]) return null;
+
+  const item = itemDb[itemNameEn];
+  const comparison = [];
+
+  // Check variable magic stats
+  for (const dbStat of item.variableStats) {
+    const statKey = placeholderToStatKey(dbStat.name);
+    if (!statKey || !userStats[statKey]) continue;
+
+    const userVal = userStats[statKey].value;
+    if (userVal === undefined) continue;
+
+    const rangeSpan = dbStat.max - dbStat.min;
+    const quality = rangeSpan > 0
+      ? Math.round(((userVal - dbStat.min) / rangeSpan) * 100)
+      : 100;
+
+    comparison.push({
+      stat: userStats[statKey].label || STAT_LABELS[statKey] || statKey,
+      statKey,
+      userValue: userVal,
+      min: dbStat.min,
+      max: dbStat.max,
+      quality: Math.max(0, Math.min(100, quality)),
+      isPerfect: userVal >= dbStat.max,
+    });
+  }
+
+  // Check base stat (defense) if user has it and no variable defense stat already matched
+  const hasDefenseComparison = comparison.some(c => c.statKey === 'defense');
+  if (userStats.defense && !hasDefenseComparison && item.baseStats.length > 0) {
+    const defStat = item.baseStats.find(s => s.name.startsWith('Defense'));
+    if (defStat && defStat.min !== defStat.max) {
+      const userVal = userStats.defense.value;
+      if (userVal !== undefined) {
+        const rangeSpan = defStat.max - defStat.min;
+        const quality = rangeSpan > 0
+          ? Math.round(((userVal - defStat.min) / rangeSpan) * 100)
+          : 100;
+
+        comparison.push({
+          stat: '방어력',
+          statKey: 'defense',
+          userValue: userVal,
+          min: defStat.min,
+          max: defStat.max,
+          quality: Math.max(0, Math.min(100, quality)),
+          isPerfect: userVal >= defStat.max,
+        });
+      }
+    }
+  }
+
+  if (comparison.length === 0) return null;
+
+  // Perfect analysis
+  const totalStats = comparison.length;
+  const perfectCount = comparison.filter(c => c.isPerfect).length;
+  const avgQuality = Math.round(comparison.reduce((sum, c) => sum + c.quality, 0) / totalStats);
+  const isPerfect = perfectCount === totalStats && totalStats > 0;
+
+  return {
+    comparison,
+    perfectAnalysis: {
+      itemName: itemNameEn,
+      quality: item.quality,
+      isPerfect,
+      avgQuality,
+      perfectCount,
+      totalStats,
+      grade: isPerfect ? '으뜸' : avgQuality >= 90 ? '상' : avgQuality >= 70 ? '중상' : avgQuality >= 50 ? '중' : avgQuality >= 30 ? '중하' : '하',
+    },
+  };
+}
+
+// --- Stat Comparison (D2Trader ranges, fallback) ---
 
 function compareStats(userStats, itemAttrs) {
   const comparison = [];
