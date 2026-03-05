@@ -840,6 +840,7 @@ function compareWithLocalDb(itemNameEn, userStats) {
     const label = (statKey && STAT_LABELS[statKey]) || formatPlaceholder(s.name);
     perfectSpec.push({
       label,
+      min: s.min,
       max: s.max,
       varies: s.varies,
       userValue: statKey && userStats[statKey] ? userStats[statKey].value : null,
@@ -888,6 +889,7 @@ function buildPerfectSpecOnly(item, itemNameEn, userStats) {
     const label = (statKey && STAT_LABELS[statKey]) || formatPlaceholder(s.name);
     perfectSpec.push({
       label,
+      min: s.min,
       max: s.max,
       varies: s.varies,
       userValue: statKey && userStats[statKey] ? userStats[statKey].value : null,

@@ -281,43 +281,51 @@ function renderPriceInfo(data, itemName) {
     statComparison.classList.remove('hidden');
     let barsHtml = '';
 
-    // Perfect analysis summary with 으뜸 스펙 popup
+    // Perfect analysis summary with inline 으뜸 스펙
     if (pa) {
       const gradeClass = pa.avgQuality == null ? 'grade-ref' : pa.isPerfect ? 'grade-perfect' : pa.avgQuality >= 90 ? 'grade-high' : pa.avgQuality >= 70 ? 'grade-mid' : 'grade-low';
 
-      // Build 으뜸 스펙 popup content
+      // Build 으뜸 스펙 inline content
       let specHtml = '';
       if (pa.perfectSpec && pa.perfectSpec.length > 0) {
-        specHtml = pa.perfectSpec.map(s => {
-          const varies = s.varies;
-          const maxVal = s.max;
-          const userVal = s.userValue;
-          let valHtml;
-          if (!varies) {
-            valHtml = `<span class="spec-fixed">${maxVal}</span>`;
-          } else if (userVal != null && userVal >= maxVal) {
-            valHtml = `<span class="spec-perfect">${maxVal}</span>`;
-          } else if (userVal != null) {
-            valHtml = `<span class="spec-gap">${userVal}</span> / <span class="spec-max">${maxVal}</span>`;
-          } else {
-            valHtml = `<span class="spec-max">${maxVal}</span>`;
-          }
-          return `<div class="spec-row${varies ? ' spec-varies' : ''}">${escapeHtml(s.label)}: ${valHtml}</div>`;
-        }).join('');
+        const qualityLabel = pa.quality === 'unique' ? '유니크' : pa.quality === 'set' ? '세트' : pa.quality === 'runeword' ? '룬워드' : pa.quality;
+        specHtml = `<div class="spec-inline">
+          <div class="spec-header">
+            <span class="spec-item-name">${escapeHtml(pa.itemName)}</span>
+            ${pa.baseName ? `<span class="spec-base">${escapeHtml(pa.baseName)} (${qualityLabel})</span>` : `<span class="spec-base">${qualityLabel}</span>`}
+          </div>
+          <div class="spec-title">으뜸 스펙</div>
+          <div class="spec-list">${pa.perfectSpec.map(s => {
+            const varies = s.varies;
+            const maxVal = s.max;
+            const userVal = s.userValue;
+            let valHtml;
+            if (!varies) {
+              valHtml = `<span class="spec-fixed">${maxVal}</span>`;
+            } else if (userVal != null && userVal >= maxVal) {
+              valHtml = `<span class="spec-perfect">${maxVal}</span>`;
+            } else if (userVal != null) {
+              valHtml = `<span class="spec-gap">${userVal}</span> / <span class="spec-max">${maxVal}</span>`;
+            } else {
+              valHtml = `<span class="spec-max">${s.min != null && s.min !== maxVal ? s.min + '~' : ''}${maxVal}</span>`;
+            }
+            return `<div class="spec-row${varies ? ' spec-varies' : ''}">${escapeHtml(s.label)}: ${valHtml}</div>`;
+          }).join('')}</div>
+        </div>`;
       }
 
-      const qualityLabel = pa.quality === 'unique' ? '유니크' : pa.quality === 'set' ? '세트' : pa.quality === 'runeword' ? '룬워드' : pa.quality;
-      const popupData = specHtml ? `data-popup="${escapeHtml(`<div class='popup-name'>${escapeHtml(pa.itemName)}</div>${pa.baseName ? `<div class='popup-base'>${escapeHtml(pa.baseName)} (${qualityLabel})</div>` : `<div class='popup-base'>${qualityLabel}</div>`}<div class='popup-divider'></div><div class='spec-title'>으뜸 스펙</div><div class='spec-list'>${specHtml}</div>`)}"` : '';
+      const summaryText = pa.avgQuality != null
+        ? `평균 품질 <strong>${pa.avgQuality}%</strong> · 으뜸 ${pa.perfectCount}/${pa.totalStats}개`
+        : pa.totalStats > 0 ? `가변 스탯 ${pa.totalStats}개` : `고정 스탯 아이템`;
 
       barsHtml += `
-        <div class="perfect-analysis ${gradeClass}" ${popupData}>
+        <div class="perfect-analysis ${gradeClass}">
           <div class="grade-badge">${pa.grade}</div>
           <div class="grade-detail">
-            <div class="grade-item-name">${escapeHtml(pa.itemName)}</div>
-            <span>${pa.avgQuality != null ? `평균 품질 <strong>${pa.avgQuality}%</strong> · 으뜸 ${pa.perfectCount}/${pa.totalStats}개` : pa.totalStats > 0 ? `가변 스탯 ${pa.totalStats}개 (hover로 으뜸 스펙 확인)` : `고정 스탯 아이템 (hover로 스펙 확인)`}</span>
+            <span>${summaryText}</span>
           </div>
-          <div class="grade-hint">hover</div>
-        </div>`;
+        </div>
+        ${specHtml}`;
     }
 
     for (const sc of data.statComparison) {
@@ -336,25 +344,6 @@ function renderPriceInfo(data, itemName) {
     }
     statBars.innerHTML = barsHtml;
 
-    // Attach popup to perfect-analysis box
-    const paBox = statBars.querySelector('.perfect-analysis[data-popup]');
-    if (paBox) {
-      const popup = document.getElementById('floatingPopup');
-      paBox.addEventListener('mouseenter', () => {
-        popup.innerHTML = paBox.dataset.popup;
-        popup.classList.remove('hidden');
-        const rect = paBox.getBoundingClientRect();
-        let left = rect.right + 8;
-        let top = rect.top;
-        if (left + 320 > window.innerWidth) left = rect.left - 328;
-        if (top + 300 > window.innerHeight) top = window.innerHeight - 310;
-        popup.style.left = left + 'px';
-        popup.style.top = top + 'px';
-      });
-      paBox.addEventListener('mouseleave', () => {
-        popup.classList.add('hidden');
-      });
-    }
   }
 
   // --- Trade history ---

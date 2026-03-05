@@ -343,20 +343,29 @@ textarea:focus {
   color: #e0e0e0;
 }
 
-.grade-item-name {
+/* Inline spec block */
+.spec-inline {
+  background: #16213e;
+  border-radius: 8px;
+  padding: 14px 16px;
+  margin-bottom: 16px;
+  border: 1px solid #333;
+}
+
+.spec-header {
+  margin-bottom: 10px;
+}
+
+.spec-item-name {
   color: #c4a24f;
   font-weight: 600;
   font-size: 15px;
+  display: block;
 }
 
-.grade-hint {
-  font-size: 11px;
-  color: #555;
-  writing-mode: vertical-rl;
-}
-
-.perfect-analysis[data-popup] {
-  cursor: pointer;
+.spec-base {
+  color: #888;
+  font-size: 12px;
 }
 
 .perfect-tag {
