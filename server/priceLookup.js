@@ -724,10 +724,33 @@ function formatPlaceholder(name) {
  * Compare user's item stats against local item DB ranges.
  * Returns stat quality comparison and perfect analysis.
  */
-function compareWithLocalDb(itemNameEn, userStats) {
-  if (!itemNameEn || !itemDb[itemNameEn]) return null;
+function findInItemDb(itemNameEn) {
+  if (!itemNameEn) return null;
+  // Exact match
+  if (itemDb[itemNameEn]) return itemDb[itemNameEn];
+  // Case-insensitive match
+  const lower = itemNameEn.toLowerCase();
+  for (const [name, item] of Object.entries(itemDb)) {
+    if (name.toLowerCase() === lower) return item;
+  }
+  // Partial match for runewords with variants: "Spirit" → "Spirit (Shield)" or "Spirit (Weapon)"
+  const candidates = [];
+  for (const [name, item] of Object.entries(itemDb)) {
+    if (name.startsWith(itemNameEn + ' (') || name.toLowerCase().startsWith(lower + ' (')) {
+      candidates.push(item);
+    }
+  }
+  // If multiple variants, prefer armor/shield over weapon (more commonly price-checked)
+  if (candidates.length > 0) {
+    return candidates.find(c => c.baseName && /shield|monarch|plate|armor/i.test(c.baseName))
+      || candidates[0];
+  }
+  return null;
+}
 
-  const item = itemDb[itemNameEn];
+function compareWithLocalDb(itemNameEn, userStats) {
+  const item = findInItemDb(itemNameEn);
+  if (!item) return null;
   const comparison = [];
 
   // Check variable magic stats
