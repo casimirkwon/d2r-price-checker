@@ -497,16 +497,24 @@ function buildMarketComparison(listings, userStats, userProps = {}) {
     if (stat.value !== undefined) userFlat[key] = stat.value;
   }
 
-  // Find stats to display: stats that exist in user's item AND in at least one listing
-  // This ensures the user always sees their stats compared to the market
+  const userEthereal = userProps.ethereal || false;
+  const userSockets = userProps.sockets || 0;
+
+  // Find stats to display: UNION of user stats and listing stats
+  // Shows listing-only stats too (user value will be '-')
   const listingStatKeys = new Set();
   for (const l of listings) {
     if (l.stats) Object.keys(l.stats).forEach(k => listingStatKeys.add(k));
   }
 
+  // Include user stats that appear in listings + listing stats that appear frequently
   const variableStats = [];
-  for (const key of Object.keys(userFlat)) {
-    if (listingStatKeys.has(key)) {
+  const userKeys = new Set(Object.keys(userFlat));
+  for (const key of listingStatKeys) {
+    // Count how many listings have this stat
+    const count = listings.filter(l => l.stats?.[key] != null).length;
+    // Include if: user has it, OR at least 30% of listings have it
+    if (userKeys.has(key) || count >= listings.length * 0.3) {
       variableStats.push(key);
     }
   }
@@ -541,24 +549,33 @@ function buildMarketComparison(listings, userStats, userProps = {}) {
     })
     .sort((a, b) => a.priceCP - b.priceCP);
 
-  // User's stats for the display columns
+  // Group by variant (ethereal x socket count)
+  const sameVariant = compListings.filter(l =>
+    (!!l.ethereal) === userEthereal && (l.socket || 0) === userSockets
+  );
+  const otherVariant = compListings.filter(l =>
+    (!!l.ethereal) !== userEthereal || (l.socket || 0) !== userSockets
+  );
+
+  // User's stats for the display columns (null for stats user doesn't have)
   const userDisplayStats = {};
   for (const key of displayStats) {
     userDisplayStats[key] = userFlat[key] ?? null;
   }
 
-  // Estimate value range: find listings with similar key stat values
+  // Estimate value range from same-variant listings preferentially
   let estimatedRange = null;
-  if (compListings.length >= 2 && displayStats.length > 0) {
+  const estimationPool = sameVariant.length >= 2 ? sameVariant : compListings;
+
+  if (estimationPool.length >= 2 && displayStats.length > 0) {
     // Score each listing by how similar its stats are to the user's
-    const scored = compListings.map(l => {
+    const scored = estimationPool.map(l => {
       let totalDiff = 0;
       let compared = 0;
       for (const key of displayStats) {
         const userVal = userFlat[key];
         const listVal = l.stats[key];
         if (userVal != null && listVal != null) {
-          // Normalize difference by the stat range across listings
           const allVals = listings.map(x => x.stats?.[key]).filter(v => v != null);
           const range = Math.max(...allVals) - Math.min(...allVals);
           if (range > 0) {
@@ -567,7 +584,18 @@ function buildMarketComparison(listings, userStats, userProps = {}) {
           }
         }
       }
-      const similarity = compared > 0 ? 1 - (totalDiff / compared) : 0;
+      let similarity = compared > 0 ? 1 - (totalDiff / compared) : 0;
+
+      // Penalize ethereal mismatch heavily
+      if ((!!l.ethereal) !== userEthereal) {
+        similarity *= 0.3;
+      }
+      // Penalize socket count mismatch
+      const socketDiff = Math.abs((l.socket || 0) - userSockets);
+      if (socketDiff > 0) {
+        similarity *= Math.max(0.5, 1 - socketDiff * 0.2);
+      }
+
       return { ...l, similarity };
     });
 
@@ -588,11 +616,13 @@ function buildMarketComparison(listings, userStats, userProps = {}) {
 
   return {
     displayStats: displayStats.map(k => ({ key: k, label: STAT_LABELS[k] || k })),
-    listings: compListings,
+    listings: sameVariant,
+    otherVariantListings: otherVariant,
     userStats: userDisplayStats,
-    userEthereal: userProps.ethereal || false,
-    userSockets: userProps.sockets || 0,
+    userEthereal,
+    userSockets,
     estimatedRange,
+    variantLabel: `${userEthereal ? '무형' : '비무형'} ${userSockets}소켓`,
   };
 }
 

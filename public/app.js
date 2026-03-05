@@ -268,7 +268,8 @@ function renderPriceInfo(data, itemName) {
   priceInfo.innerHTML = summaryHtml;
 
   // --- Market Comparison Table ---
-  if (mc && mc.listings && mc.listings.length > 0 && mc.displayStats.length > 0) {
+  const totalListings = (mc?.listings?.length || 0) + (mc?.otherVariantListings?.length || 0);
+  if (mc && totalListings > 0 && mc.displayStats.length > 0) {
     marketComparison.classList.remove('hidden');
     renderMarketTable(mc);
   }
@@ -336,12 +337,15 @@ function renderPriceInfo(data, itemName) {
 }
 
 function renderMarketTable(mc) {
-  const { displayStats, listings, userStats, userEthereal, userSockets } = mc;
+  const { displayStats, listings, otherVariantListings, userStats, userEthereal, userSockets, variantLabel } = mc;
+  const allListings = [...listings, ...(otherVariantListings || [])];
+  const showEth = allListings.some(l => l.ethereal) || userEthereal;
+  const showSock = allListings.some(l => l.socket > 0) || userSockets > 0;
 
   // Build header
   let html = '<thead><tr><th>가격</th>';
-  if (listings.some(l => l.ethereal)) html += '<th>무형</th>';
-  if (listings.some(l => l.socket > 0)) html += '<th>소켓</th>';
+  if (showEth) html += '<th>무형</th>';
+  if (showSock) html += '<th>소켓</th>';
   for (const ds of displayStats) {
     html += `<th>${escapeHtml(ds.label)}</th>`;
   }
@@ -349,34 +353,48 @@ function renderMarketTable(mc) {
 
   // User's item row (highlighted at top)
   html += '<tr class="user-row"><td class="price-cell">내 아이템</td>';
-  if (listings.some(l => l.ethereal)) html += `<td>${userEthereal ? 'O' : '-'}</td>`;
-  if (listings.some(l => l.socket > 0)) html += `<td>${userSockets || '-'}</td>`;
+  if (showEth) html += `<td>${userEthereal ? 'O' : '-'}</td>`;
+  if (showSock) html += `<td>${userSockets || '-'}</td>`;
   for (const ds of displayStats) {
     const val = userStats[ds.key];
     html += `<td class="user-stat">${val != null ? val : '-'}</td>`;
   }
   html += '</tr>';
 
-  // Listing rows
+  // Same variant listings
   for (const listing of listings) {
-    html += '<tr>';
-    html += `<td class="price-cell">${listing.priceCP.toLocaleString()} CP</td>`;
-    if (listings.some(l => l.ethereal)) html += `<td>${listing.ethereal ? 'O' : '-'}</td>`;
-    if (listings.some(l => l.socket > 0)) html += `<td>${listing.socket || '-'}</td>`;
-    for (const ds of displayStats) {
-      const listVal = listing.stats[ds.key];
-      const userVal = userStats[ds.key];
-      let cls = '';
-      if (listVal != null && userVal != null) {
-        cls = userVal > listVal ? 'stat-better' : userVal < listVal ? 'stat-worse' : 'stat-equal';
-      }
-      html += `<td class="${cls}">${listVal != null ? listVal : '-'}</td>`;
+    html += renderListingRow(listing, displayStats, userStats, showEth, showSock, '');
+  }
+
+  // Other variant listings (separated)
+  if (otherVariantListings && otherVariantListings.length > 0) {
+    const colSpan = 1 + (showEth ? 1 : 0) + (showSock ? 1 : 0) + displayStats.length;
+    html += `<tr class="variant-separator"><td colspan="${colSpan}">다른 변형 매물 (${otherVariantListings.length}건)</td></tr>`;
+    for (const listing of otherVariantListings) {
+      html += renderListingRow(listing, displayStats, userStats, showEth, showSock, 'other-variant');
     }
-    html += '</tr>';
   }
 
   html += '</tbody>';
   marketTable.innerHTML = html;
+}
+
+function renderListingRow(listing, displayStats, userStats, showEth, showSock, extraClass) {
+  let html = `<tr class="${extraClass}">`;
+  html += `<td class="price-cell">${listing.priceCP.toLocaleString()} CP</td>`;
+  if (showEth) html += `<td>${listing.ethereal ? 'O' : '-'}</td>`;
+  if (showSock) html += `<td>${listing.socket || '-'}</td>`;
+  for (const ds of displayStats) {
+    const listVal = listing.stats[ds.key];
+    const userVal = userStats[ds.key];
+    let cls = '';
+    if (listVal != null && userVal != null) {
+      cls = userVal > listVal ? 'stat-better' : userVal < listVal ? 'stat-worse' : 'stat-equal';
+    }
+    html += `<td class="${cls}">${listVal != null ? listVal : '-'}</td>`;
+  }
+  html += '</tr>';
+  return html;
 }
 
 function escapeHtml(str) {

@@ -429,6 +429,20 @@ textarea:focus {
   color: #6ba3f7;
 }
 
+.market-table .variant-separator td {
+  background: #1a1a2e;
+  color: #888;
+  font-size: 12px;
+  text-align: center;
+  padding: 6px 10px;
+  border-bottom: 1px solid #333;
+  border-top: 2px solid #333;
+}
+
+.market-table .other-variant {
+  opacity: 0.6;
+}
+
 /* Error */
 .error-msg {
   background: #2d1515;
