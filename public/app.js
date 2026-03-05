@@ -377,6 +377,27 @@ function renderMarketTable(mc) {
 
   html += '</tbody>';
   marketTable.innerHTML = html;
+
+  // Attach hover popup events
+  const popup = document.getElementById('floatingPopup');
+  marketTable.querySelectorAll('.listing-name[data-popup]').forEach(cell => {
+    cell.addEventListener('mouseenter', (e) => {
+      popup.innerHTML = cell.dataset.popup;
+      popup.classList.remove('hidden');
+      const rect = cell.getBoundingClientRect();
+      let left = rect.right + 8;
+      let top = rect.top;
+      // Keep popup within viewport
+      if (left + 300 > window.innerWidth) left = rect.left - 308;
+      if (top + 250 > window.innerHeight) top = window.innerHeight - 260;
+      popup.style.left = left + 'px';
+      popup.style.top = top + 'px';
+    });
+    cell.addEventListener('mouseleave', () => {
+      popup.classList.remove('hidden');
+      popup.classList.add('hidden');
+    });
+  });
 }
 
 function renderListingRow(listing, displayStats, userStats, showEth, showSock, extraClass) {
@@ -387,17 +408,18 @@ function renderListingRow(listing, displayStats, userStats, showEth, showSock, e
   const linkOpen = listing.detailUrl ? `<a href="${listing.detailUrl}" target="_blank" class="listing-link">` : '<span>';
   const linkClose = listing.detailUrl ? '</a>' : '</span>';
 
-  let popupContent = '';
+  let popupHtml = '';
   if (listing.allStats && listing.allStats.length > 0) {
     const statsHtml = listing.allStats.map(s => `<div>${escapeHtml(s.label)}: <strong>${s.value}</strong></div>`).join('');
-    popupContent = `<div class="listing-popup">${listing.thumb ? `<img src="${listing.thumb}" class="popup-thumb">` : ''}` +
+    popupHtml = `${listing.thumb ? `<img src="${listing.thumb}" class="popup-thumb">` : ''}` +
       `<div class="popup-name">${name}</div>` +
       (listing.baseType ? `<div class="popup-base">${escapeHtml(listing.baseType)}</div>` : '') +
       (listing.ethereal ? '<div class="popup-eth">무형 (Ethereal)</div>' : '') +
-      `<div class="popup-stats">${statsHtml}</div></div>`;
+      `<div class="popup-stats">${statsHtml}</div>`;
   }
 
-  html += `<td class="listing-name">${linkOpen}${name}${linkClose}${popupContent}</td>`;
+  const dataAttr = popupHtml ? ` data-popup="${popupHtml.replace(/"/g, '&quot;')}"` : '';
+  html += `<td class="listing-name"${dataAttr}>${linkOpen}${name}${linkClose}</td>`;
   html += `<td class="price-cell">${listing.priceCP.toLocaleString()} CP</td>`;
   if (showEth) html += `<td>${listing.ethereal ? 'O' : '-'}</td>`;
   if (showSock) html += `<td>${listing.socket || '-'}</td>`;

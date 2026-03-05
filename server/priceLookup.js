@@ -27,7 +27,7 @@ const TRADERIE_PROPS = {
 
 // ChaossCube modifier ID → our stat key
 const CC_MOD_TO_KEY = {
-  47: 'ed', 48: 'ed', 50: 'addsDmg', 51: 'str', 52: 'dex', 53: 'vit',
+  7: 'defense', 47: 'ed', 48: 'ed', 50: 'addsDmg', 51: 'str', 52: 'dex', 53: 'vit',
   54: 'energy', 55: 'mana', 56: 'life', 60: 'ias', 61: 'fcr', 62: 'fhr',
   65: 'frw', 66: 'cb', 69: 'pdr', 70: 'lifeLeech', 71: 'manaLeech',
   73: 'allSkills', 74: 'allAttr', 75: 'allRes', 76: 'fireRes', 77: 'coldRes',
@@ -42,7 +42,7 @@ const STAT_LABELS = {
   str: '힘', vit: '활력', dex: '민첩', energy: '에너지',
   life: '생명력', mana: '마나', cb: '크러싱', thorns: '반사피해',
   pdr: '물리감소%', lifeLeech: '생흡%', manaLeech: '마흡%',
-  slowerStamina: '지구력', defense: '방어력', addsDmg: '추가피해',
+  slowerStamina: '지구력', defense: '방어력', addsDmg: '추가피해', minDmg: '최소피해', maxDmg: '최대피해',
   enemyLightRes: '적번저', enemyFireRes: '적화저', enemyColdRes: '적냉저',
 };
 
@@ -527,9 +527,9 @@ function buildMarketComparison(listings, userStats, userProps = {}) {
   }
 
   // Sort: prioritize commonly used trade stats
-  const statPriority = ['mf', 'ed', 'allSkills', 'allRes', 'allAttr', 'fcr', 'ias', 'fhr', 'frw',
+  const statPriority = ['defense', 'mf', 'ed', 'allSkills', 'allRes', 'allAttr', 'fcr', 'ias', 'fhr', 'frw',
     'str', 'vit', 'dex', 'life', 'mana', 'cb', 'enemyLightRes', 'enemyFireRes', 'enemyColdRes',
-    'lifeLeech', 'manaLeech', 'thorns', 'pdr', 'defense'];
+    'lifeLeech', 'manaLeech', 'thorns', 'pdr', 'addsDmg', 'minDmg', 'maxDmg'];
   variableStats.sort((a, b) => {
     const ai = statPriority.indexOf(a);
     const bi = statPriority.indexOf(b);

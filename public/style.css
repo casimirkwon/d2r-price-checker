@@ -443,13 +443,17 @@ textarea:focus {
   opacity: 0.6;
 }
 
-/* Listing name & popup */
+/* Listing name */
 .market-table .listing-name {
   text-align: left;
-  position: relative;
   max-width: 120px;
   overflow: hidden;
   text-overflow: ellipsis;
+  cursor: default;
+}
+
+.market-table .listing-name[data-popup] {
+  cursor: pointer;
 }
 
 .listing-link {
@@ -461,12 +465,10 @@ textarea:focus {
   text-decoration: underline;
 }
 
-.listing-popup {
-  display: none;
-  position: absolute;
-  left: 0;
-  top: 100%;
-  z-index: 100;
+/* Floating popup */
+.floating-popup {
+  position: fixed;
+  z-index: 1000;
   background: #16213e;
   border: 1px solid #444;
   border-radius: 8px;
@@ -476,10 +478,6 @@ textarea:focus {
   white-space: normal;
   box-shadow: 0 4px 16px rgba(0,0,0,0.5);
   pointer-events: none;
-}
-
-.listing-name:hover .listing-popup {
-  display: block;
 }
 
 .popup-thumb {
