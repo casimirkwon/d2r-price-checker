@@ -219,31 +219,49 @@ const STAT_PATTERNS = [
 export function parseItemText(text) {
   // Pre-clean OCR text: fix common OCR artifacts
   let cleaned = text
+    // Pipe/bar → Korean character fixes (kor-only OCR artifacts)
+    .replace(/[|l][|l]술/g, '기술')  // ||술 → 기술
+    .replace(/7[|l]술/g, '기술')  // 7|술 → 기술
     .replace(/ㄱ[|l]/g, '기')    // ㄱ| or ㄱl → 기
     .replace(/[|l]술/g, '기술')   // |술 or l술 → 기술
-    .replace(/\+O\b/g, '+10')    // +O → +10 (O misread as zero)
+    // Symbol → number/operator fixes
+    .replace(/\+[|l!](?=\s|$)/g, '+1') // +| or +! at end → +1
+    .replace(/\+O\b/g, '+10')    // +O → +10
     .replace(/\*(\d)/g, '+$1')   // *N → +N
-    .replace(/x(\d)/g, '+$1')    // xN → +N (x misread for +)
-    .replace(/\[(\d)/g, '$1')    // [9 → 9 (bracket before digit)
+    .replace(/\*\+/g, '+')       // *+ → +
+    .replace(/x(\d)/g, '+$1')    // xN → +N
+    .replace(/\[(\d)/g, '$1')    // [9 → 9
     .replace(/(\d)\]/g, '$1')    // 9] → 9
-    .replace(/왁[률릉룰]/g, '확률')  // 왁률 → 확률
-    .replace(/학률/g, '확률')     // 학률 → 확률
-    .replace(/능력지/g, '능력치') // 능력지 → 능력치
-    .replace(/방버력/g, '방어력') // 방버력 → 방어력
-    .replace(/저앙/g, '저항')     // 저앙 → 저항
-    .replace(/저깜/g, '저항')     // 저깜 → 저항
-    .replace(/적함/g, '저항')     // 적함 → 저항
-    .replace(/[여버][앵행][자차]/g, '여행자') // 여앵자/버앵자 → 여행자
-    .replace(/배들/g, '배틀')     // 배들 → 배틀
-    .replace(/곧기/g, '걷기')     // 곧기 → 걷기
-    .replace(/그리[폰픈]의/g, '그리폰의') // 그리픈의 → 그리폰의
-    .replace(/할리[퀸킨][관곤]\s*모/g, '할리퀸 관모') // OCR variants
-    .replace(/피애/g, '피해')     // 피애 → 피해
-    .replace(/\*\+/g, '+')       // *+ → + (double prefix)
-    .replace(/\+[|l](?=\s|$)/g, '+1') // +| or +l at end → +1
-    .replace(/\b1기술/g, '기술');  // 1기술 → 기술 (stray digit)
+    // Korean OCR corrections
+    .replace(/왁[률릉룰]/g, '확률')
+    .replace(/학률/g, '확률')
+    .replace(/능력지/g, '능력치')
+    .replace(/방[버써]력/g, '방어력')  // 방버력/방써력 → 방어력
+    .replace(/저앙/g, '저항')
+    .replace(/저깜/g, '저항')
+    .replace(/적함/g, '저항')
+    .replace(/디해/g, '피해')     // 디해 → 피해 (kor-only artifact)
+    .replace(/피애/g, '피해')
+    .replace(/[여버][앵행][자차]/g, '여행자')
+    .replace(/배들/g, '배틀')
+    .replace(/곧기/g, '걷기')
+    .replace(/그리[폰픈]의/g, '그리폰의')
+    .replace(/할리[퀸킨][관곤]\s*모/g, '할리퀸 관모')
+    .replace(/\b1기술/g, '기술')  // 1기술 → 기술
+    .replace(/[뽀호쁘]구/g, '요구');  // 뽀구/호구/쁘구 → 요구
 
-  const lines = cleaned.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+  // Remove lines that are pure noise (no Korean chars, no useful numbers)
+  const lines = cleaned.split('\n')
+    .map(l => l.trim())
+    .filter(l => {
+      if (l.length === 0) return false;
+      // Keep lines with Korean characters
+      if (/[\uAC00-\uD7A3]/.test(l)) return true;
+      // Keep lines with number patterns (stats like "842", "23 / 24")
+      if (/\d+\s*[/]\s*\d+|\d{2,}/.test(l)) return true;
+      // Drop everything else (pure English/symbol noise)
+      return false;
+    });
   if (lines.length === 0) return { error: '텍스트가 비어있습니다' };
 
   let itemNameKo = null;

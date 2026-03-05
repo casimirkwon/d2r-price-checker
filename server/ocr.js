@@ -28,8 +28,8 @@ let worker = null;
 
 async function getWorker() {
   if (!worker) {
-    console.log('[OCR] Initializing Tesseract worker (kor+eng)...');
-    worker = await Tesseract.createWorker('kor+eng', 1, {
+    console.log('[OCR] Initializing Tesseract worker (kor)...');
+    worker = await Tesseract.createWorker('kor', 1, {
       logger: m => {
         if (m.status === 'loading tesseract core' || m.status === 'loading language traineddata')
           console.log(`[OCR] ${m.status}: ${Math.round((m.progress || 0) * 100)}%`);
