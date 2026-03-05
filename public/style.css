@@ -443,6 +443,84 @@ textarea:focus {
   opacity: 0.6;
 }
 
+/* Listing name & popup */
+.market-table .listing-name {
+  text-align: left;
+  position: relative;
+  max-width: 120px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.listing-link {
+  color: #6ba3f7;
+  text-decoration: none;
+}
+
+.listing-link:hover {
+  text-decoration: underline;
+}
+
+.listing-popup {
+  display: none;
+  position: absolute;
+  left: 0;
+  top: 100%;
+  z-index: 100;
+  background: #16213e;
+  border: 1px solid #444;
+  border-radius: 8px;
+  padding: 12px;
+  min-width: 220px;
+  max-width: 300px;
+  white-space: normal;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.5);
+  pointer-events: none;
+}
+
+.listing-name:hover .listing-popup {
+  display: block;
+}
+
+.popup-thumb {
+  width: 48px;
+  height: 48px;
+  object-fit: contain;
+  float: left;
+  margin-right: 8px;
+  border-radius: 4px;
+  background: #111;
+}
+
+.popup-name {
+  color: #c4a24f;
+  font-weight: 600;
+  font-size: 14px;
+}
+
+.popup-base {
+  color: #888;
+  font-size: 12px;
+}
+
+.popup-eth {
+  color: #7dd3fc;
+  font-size: 12px;
+  margin-top: 2px;
+}
+
+.popup-stats {
+  clear: both;
+  margin-top: 8px;
+  font-size: 12px;
+  line-height: 1.6;
+  color: #ccc;
+}
+
+.popup-stats strong {
+  color: #6ba3f7;
+}
+
 /* Error */
 .error-msg {
   background: #2d1515;

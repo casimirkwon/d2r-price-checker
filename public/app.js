@@ -343,7 +343,7 @@ function renderMarketTable(mc) {
   const showSock = allListings.some(l => l.socket > 0) || userSockets > 0;
 
   // Build header
-  let html = '<thead><tr><th>가격</th>';
+  let html = '<thead><tr><th>매물</th><th>가격</th>';
   if (showEth) html += '<th>무형</th>';
   if (showSock) html += '<th>소켓</th>';
   for (const ds of displayStats) {
@@ -352,7 +352,7 @@ function renderMarketTable(mc) {
   html += '</tr></thead><tbody>';
 
   // User's item row (highlighted at top)
-  html += '<tr class="user-row"><td class="price-cell">내 아이템</td>';
+  html += '<tr class="user-row"><td class="listing-name">내 아이템</td><td class="price-cell">-</td>';
   if (showEth) html += `<td>${userEthereal ? 'O' : '-'}</td>`;
   if (showSock) html += `<td>${userSockets || '-'}</td>`;
   for (const ds of displayStats) {
@@ -368,7 +368,7 @@ function renderMarketTable(mc) {
 
   // Other variant listings (separated)
   if (otherVariantListings && otherVariantListings.length > 0) {
-    const colSpan = 1 + (showEth ? 1 : 0) + (showSock ? 1 : 0) + displayStats.length;
+    const colSpan = 2 + (showEth ? 1 : 0) + (showSock ? 1 : 0) + displayStats.length;
     html += `<tr class="variant-separator"><td colspan="${colSpan}">다른 변형 매물 (${otherVariantListings.length}건)</td></tr>`;
     for (const listing of otherVariantListings) {
       html += renderListingRow(listing, displayStats, userStats, showEth, showSock, 'other-variant');
@@ -381,6 +381,23 @@ function renderMarketTable(mc) {
 
 function renderListingRow(listing, displayStats, userStats, showEth, showSock, extraClass) {
   let html = `<tr class="${extraClass}">`;
+
+  // Name cell with hover popup
+  const name = escapeHtml(listing.name || '?');
+  const linkOpen = listing.detailUrl ? `<a href="${listing.detailUrl}" target="_blank" class="listing-link">` : '<span>';
+  const linkClose = listing.detailUrl ? '</a>' : '</span>';
+
+  let popupContent = '';
+  if (listing.allStats && listing.allStats.length > 0) {
+    const statsHtml = listing.allStats.map(s => `<div>${escapeHtml(s.label)}: <strong>${s.value}</strong></div>`).join('');
+    popupContent = `<div class="listing-popup">${listing.thumb ? `<img src="${listing.thumb}" class="popup-thumb">` : ''}` +
+      `<div class="popup-name">${name}</div>` +
+      (listing.baseType ? `<div class="popup-base">${escapeHtml(listing.baseType)}</div>` : '') +
+      (listing.ethereal ? '<div class="popup-eth">무형 (Ethereal)</div>' : '') +
+      `<div class="popup-stats">${statsHtml}</div></div>`;
+  }
+
+  html += `<td class="listing-name">${linkOpen}${name}${linkClose}${popupContent}</td>`;
   html += `<td class="price-cell">${listing.priceCP.toLocaleString()} CP</td>`;
   if (showEth) html += `<td>${listing.ethereal ? 'O' : '-'}</td>`;
   if (showSock) html += `<td>${listing.socket || '-'}</td>`;

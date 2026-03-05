@@ -451,6 +451,8 @@ async function searchChaoscube(keyword, ladder = false) {
       priceCP: item.amount,
       ethereal: item.ethereal || false,
       socket: item.socket || 0,
+      detailUrl: item.id ? `${CC_WEB}/exchange/detail/${item.id}` : null,
+      thumb: item.thumb || null,
     };
 
     // Extract stats from magicInfo (unique/magic properties)
@@ -463,6 +465,11 @@ async function searchChaoscube(keyword, ladder = false) {
       }
     }
     listing.stats = stats;
+
+    // Full stat list for detail popup
+    listing.allStats = allInfo
+      .filter(mod => mod.label && mod.value != null)
+      .map(mod => ({ label: mod.label, value: mod.value }));
 
     return listing;
   });
@@ -537,9 +544,14 @@ function buildMarketComparison(listings, userStats, userProps = {}) {
     .filter(l => l.priceCP > 0)
     .map(l => {
       const entry = {
+        name: l.name || null,
+        baseType: l.baseType || null,
         priceCP: l.priceCP,
         ethereal: l.ethereal,
         socket: l.socket,
+        detailUrl: l.detailUrl || null,
+        thumb: l.thumb || null,
+        allStats: l.allStats || [],
         stats: {},
       };
       for (const key of displayStats) {
