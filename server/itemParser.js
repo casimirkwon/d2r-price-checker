@@ -354,6 +354,82 @@ const STAT_PATTERNS = [
   // --- Poison length: "독 지속시간 N% 감소" ---
   { pattern: /독\s*지속\s*시간\s*(\d+)%\s*감소/,            key: 'poisonLenReduced', label: 'Poison Length Reduced' },
 
+  // --- Flat Defense: "방어력 +N" (modifier, not base "방어력: N") ---
+  { pattern: /방[어머버]력\s*[+*]\s*(\d+)(?!%)/,           key: 'flatDefense',   label: 'Defense' },
+
+  // --- Magic Resist: "마법 저항 +N%" ---
+  { pattern: /마법\s*저항\s*[+*](\d+)%/,                   key: 'magicRes',      label: 'Magic Resist' },
+  { pattern: /최대\s*마법\s*저항\s*[+*](\d+)%/,            key: 'maxMagicRes',   label: 'Max Magic Resist' },
+
+  // --- Damage Reduced %: "피해 N% 감소" (different from flat "피해 N 감소") ---
+  { pattern: /피해\s*(\d+)%\s*감소/,                       key: 'drPct',         label: 'Damage Reduced %' },
+
+  // --- Per-element min/max damage ---
+  { pattern: /최대\s*화염\s*피해\s*[+*](\d+)/,             key: 'maxFireDmg',    label: 'Max Fire Damage' },
+  { pattern: /최소\s*화염\s*피해\s*[+*](\d+)/,             key: 'minFireDmg',    label: 'Min Fire Damage' },
+  { pattern: /최대\s*냉기\s*피해\s*[+*](\d+)/,             key: 'maxColdDmg',    label: 'Max Cold Damage' },
+  { pattern: /최소\s*냉기\s*피해\s*[+*](\d+)/,             key: 'minColdDmg',    label: 'Min Cold Damage' },
+  { pattern: /최대\s*번개\s*피해\s*[+*](\d+)/,             key: 'maxLightDmg',   label: 'Max Lightning Damage' },
+  { pattern: /최소\s*번개\s*피해\s*[+*](\d+)/,             key: 'minLightDmg',   label: 'Min Lightning Damage' },
+  { pattern: /최대\s*독\s*피해\s*[+*](\d+)/,               key: 'maxPoisonDmg',  label: 'Max Poison Damage' },
+  { pattern: /최소\s*독\s*피해\s*[+*](\d+)/,               key: 'minPoisonDmg',  label: 'Min Poison Damage' },
+
+  // --- Flat elemental damage (non-range): "화염 피해 +N" ---
+  { pattern: /화염\s*피해\s*[+*](\d+)(?!%)/,               key: 'flatFireDmg',   label: 'Fire Damage' },
+  { pattern: /냉기\s*피해\s*[+*](\d+)(?!%)/,               key: 'flatColdDmg',   label: 'Cold Damage' },
+  { pattern: /번개\s*피해\s*[+*](\d+)(?!%)/,               key: 'flatLightDmg',  label: 'Lightning Damage' },
+  { pattern: /마법\s*피해\s*[+*](\d+)(?!%)/,               key: 'flatMagicDmg',  label: 'Magic Damage' },
+
+  // --- Class Skill Levels: "아마존 기술 레벨 +N" ---
+  { pattern: /아마존\s*기술\s*레벨\s*[+*](\d+)/,           key: 'amazonSkills',  label: 'Amazon Skill Levels' },
+  { pattern: /성기사\s*기술\s*레벨\s*[+*](\d+)/,           key: 'paladinSkills', label: 'Paladin Skill Levels' },
+  { pattern: /강령술사\s*기술\s*레벨\s*[+*](\d+)/,         key: 'necroSkills',   label: 'Necromancer Skill Levels' },
+  { pattern: /원소술사\s*기술\s*레벨\s*[+*](\d+)/,         key: 'sorcSkills',    label: 'Sorceress Skill Levels' },
+  { pattern: /야만용사\s*기술\s*레벨\s*[+*](\d+)/,         key: 'barbSkills',    label: 'Barbarian Skill Levels' },
+  { pattern: /암살자\s*기술\s*레벨\s*[+*](\d+)/,           key: 'assassinSkills', label: 'Assassin Skill Levels' },
+  { pattern: /드루이드\s*기술\s*레벨\s*[+*](\d+)/,         key: 'druidSkills',   label: 'Druid Skill Levels' },
+  // "모든 기술 레벨 +N" variant of All Skills
+  { pattern: /모든\s*기술\s*레벨\s*[+*](\d+)/,             key: 'allSkills',     label: 'All Skills' },
+
+  // --- Attacker Takes Lightning Damage: "공격자가 번개 피해를 N 받음" ---
+  { pattern: /공격자[가ㄱ]?\s*번개\s*피해[를]?\s*(\d+)/,    key: 'thornsLight',   label: 'Attacker Takes Lightning Damage' },
+
+  // --- Kick Damage: "발차기 피해 +N" ---
+  { pattern: /발차기\s*피해\s*[+*](\d+)/,                  key: 'kickDmg',       label: 'Kick Damage' },
+
+  // --- Stamina recovery: "지구력 회복 속도 N% 증가" ---
+  { pattern: /지구력\s*회복\s*속도\s*(\d+)%/,              key: 'staminaHeal',   label: 'Heal Stamina' },
+
+  // --- Drain Life: "생명력 흡수 N" (flat, not %) ---
+  { pattern: /생명력\s*흡수\s*(\d+)(?!%)/,                 key: 'drainLife',     label: 'Drain Life' },
+
+  // --- Vendor price reduction: "상점 물품 가격 N% 하락" ---
+  { pattern: /상점\s*물품\s*가격\s*(\d+)%/,                key: 'vendorPrices',  label: 'Reduces Vendor Prices' },
+
+  // --- Self-repair: "내구도 N 회복" ---
+  { pattern: /내구도\s*(\d+)\s*회복/,                      key: 'selfRepair',    label: 'Repairs Durability' },
+
+  // --- Max durability: "최대 내구도 N% 증가" ---
+  { pattern: /최대\s*내구도\s*(\d+)%/,                     key: 'maxDurPct',     label: 'Max Durability' },
+
+  // --- Absorb alternate format: "화염 피해 흡수 +N" ---
+  { pattern: /화염\s*피해\s*흡수\s*[+*](\d+)/,             key: 'fireAbsorb',    label: 'Fire Absorb' },
+  { pattern: /냉기\s*피해\s*흡수\s*[+*](\d+)/,             key: 'coldAbsorb',    label: 'Cold Absorb' },
+  { pattern: /번개\s*피해\s*흡수\s*[+*](\d+)/,             key: 'lightAbsorb',   label: 'Lightning Absorb' },
+  { pattern: /마법\s*피해\s*흡수\s*[+*](\d+)/,             key: 'magicAbsorb',   label: 'Magic Absorb' },
+
+  // --- Ignore target defense ---
+  { pattern: /대상의\s*방어력\s*무시/,                     key: '_ignoreDefense', label: 'Ignore Target Defense' },
+
+  // --- Hit Blinds Target ---
+  { pattern: /적중\s*시\s*대상\s*실명/,                    key: '_blindTarget',  label: 'Hit Blinds Target' },
+
+  // --- Half Freeze Duration ---
+  { pattern: /빙결\s*지속\s*시간\s*절반/,                  key: '_halfFreeze',   label: 'Half Freeze Duration' },
+
+  // --- Slain Monsters Rest in Peace ---
+  { pattern: /처치한\s*괴물.*?안식/,                       key: '_restInPeace',  label: 'Slain Monsters Rest in Peace' },
+
   // --- Boolean flags ---
   { pattern: /파괴\s*불가/,                                key: '_indestructible', label: 'Indestructible' },
   { pattern: /빙결되지\s*않음/,                            key: '_cannotFreeze',  label: 'Cannot Be Frozen' },

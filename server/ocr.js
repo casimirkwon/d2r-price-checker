@@ -1,25 +1,39 @@
 import Tesseract from 'tesseract.js';
 import sharp from 'sharp';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const TESSDATA_PATH = path.join(__dirname, '..', 'data', 'tessdata');
 
 /**
  * Preprocess a D2R screenshot for better OCR accuracy.
  * D2R tooltips have light/gold/blue text on very dark background.
- * Strategy: scale up, boost brightness of text colors, binarize.
+ * Strategy: scale up, color-aware grayscale, denoise, sharpen, binarize.
  */
 async function preprocessImage(buffer) {
   const meta = await sharp(buffer).metadata();
-  const scale = meta.width < 400 ? 4 : meta.width < 600 ? 3 : meta.width < 1000 ? 2 : 1;
+  // Aggressive upscaling for small images — clearer character shapes
+  const scale = meta.width < 300 ? 5 : meta.width < 500 ? 4 : meta.width < 800 ? 3 : meta.width < 1200 ? 2 : 1;
 
-  // Extract text from tooltip: use the value (brightness) channel from HSV-like approach
-  // D2R tooltip text is bright (white, gold, blue) on dark background
   return sharp(buffer)
     .flatten({ background: '#000000' })  // remove alpha channel (clipboard PNG)
     .resize({ width: meta.width * scale, kernel: 'lanczos3' })
+    // Equal-weight grayscale: standard grayscale (0.21R+0.72G+0.07B) under-weights
+    // red and blue channels. D2R text is gold (high R,G), blue (high B), white (all high).
+    // Using [0.4, 0.4, 0.4] ensures all colored text stays bright after conversion.
+    .recomb([
+      [0.4, 0.4, 0.4],
+      [0.4, 0.4, 0.4],
+      [0.4, 0.4, 0.4],
+    ])
     .grayscale()
-    .normalize()
-    .linear(2.5, -100)    // high contrast: push dark pixels darker, light brighter
-    .threshold(75)         // binarize: keep bright text
-    .negate()              // invert: dark text on white bg (Tesseract prefers this)
+    .median(3)                    // Remove salt-and-pepper noise
+    .normalize()                  // Use full dynamic range
+    .sharpen({ sigma: 1.5 })     // Sharpen character edges for clearer glyphs
+    .linear(2.0, -80)            // High contrast (slightly less aggressive than before)
+    .threshold(85)               // Binarize: keep bright text
+    .negate()                    // Invert: dark text on white bg (Tesseract prefers this)
     .png()
     .toBuffer();
 }
@@ -28,8 +42,9 @@ let worker = null;
 
 async function getWorker() {
   if (!worker) {
-    console.log('[OCR] Initializing Tesseract worker (kor)...');
+    console.log('[OCR] Initializing Tesseract worker (kor, best model)...');
     worker = await Tesseract.createWorker('kor', 1, {
+      langPath: TESSDATA_PATH,
       logger: m => {
         if (m.status === 'loading tesseract core' || m.status === 'loading language traineddata')
           console.log(`[OCR] ${m.status}: ${Math.round((m.progress || 0) * 100)}%`);
@@ -40,7 +55,7 @@ async function getWorker() {
       tessedit_pageseg_mode: '6',
       preserve_interword_spaces: '1',
     });
-    console.log('[OCR] Tesseract worker ready.');
+    console.log('[OCR] Tesseract worker ready (best model).');
   }
   return worker;
 }
