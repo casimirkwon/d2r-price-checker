@@ -22,16 +22,13 @@
 ### 설치
 
 ```bash
-git clone <repository-url>
-cd d2
+git clone https://github.com/casimirkwon/d2r-price-checker.git
+cd d2r-price-checker
 npm install
-```
-
-### 실행
-
-```bash
 npm start
 ```
+
+> **주의:** `package-lock.json`을 삭제하지 마세요. 의존성 버전이 고정되어 있어 삭제 후 재설치하면 Node 18에서 호환되지 않는 버전이 설치될 수 있습니다.
 
 브라우저에서 http://localhost:3000 접속.
 
