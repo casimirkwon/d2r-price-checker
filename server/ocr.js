@@ -11,10 +11,11 @@ const TESSDATA_PATH = path.join(__dirname, '..', 'data', 'tessdata');
  * D2R tooltips have light/gold/blue text on very dark background.
  * Strategy: scale up, color-aware grayscale, denoise, sharpen, binarize.
  */
-async function preprocessImage(buffer) {
+async function preprocessImage(buffer, scale) {
   const meta = await sharp(buffer).metadata();
-  // Aggressive upscaling for small images — clearer character shapes
-  const scale = meta.width < 300 ? 5 : meta.width < 500 ? 4 : meta.width < 800 ? 3 : meta.width < 1200 ? 2 : 1;
+  if (!scale) {
+    scale = Math.max(2, Math.round(2400 / meta.width));
+  }
 
   return sharp(buffer)
     .flatten({ background: '#000000' })  // remove alpha channel (clipboard PNG)
@@ -60,17 +61,11 @@ async function getWorker() {
   return worker;
 }
 
-export async function runOCR(imageBuffer) {
-  console.log(`[OCR] Processing image (${imageBuffer.length} bytes)...`);
-  const processed = await preprocessImage(imageBuffer);
-  console.log(`[OCR] Preprocessed image (${processed.length} bytes), running recognition...`);
-  const w = await getWorker();
-  const { data: { text, confidence } } = await w.recognize(processed);
-
-  // Post-process in order:
-  // 1) Symbol-to-Korean substitutions (before stripping)
-  // 2) Strip remaining noise characters
-  const cleaned = text
+/**
+ * Post-process raw OCR text: fix common artifacts, strip noise.
+ */
+function postProcess(text) {
+  return text
     .replace(/[|l][|l]술/g, '기술')   // ||술 → 기술
     .replace(/7[|l]술/g, '기술')      // 7|술 → 기술
     .replace(/1[|l]술/g, '기술')      // 1|술 → 기술
@@ -83,10 +78,47 @@ export async function runOCR(imageBuffer) {
     .map(line => line.replace(/[^\uAC00-\uD7A3\u3131-\u3163\u1100-\u11FF\d\s+\-/:()%.~,]/g, '').trim())
     .join('\n')
     .trim();
+}
 
-  console.log(`[OCR] Result: ${cleaned.length} chars, confidence: ${confidence}`);
-  if (!cleaned) {
+export async function runOCR(imageBuffer) {
+  console.log(`[OCR] Processing image (${imageBuffer.length} bytes)...`);
+  const meta = await sharp(imageBuffer).metadata();
+
+  // Primary pass: target ~2400px wide
+  const primaryScale = Math.max(2, Math.round(2400 / meta.width));
+  const processed = await preprocessImage(imageBuffer, primaryScale);
+  console.log(`[OCR] Preprocessed (${primaryScale}x, ${meta.width * primaryScale}px), running recognition...`);
+
+  const w = await getWorker();
+  const { data: { text, confidence } } = await w.recognize(processed);
+  let result = postProcess(text);
+
+  console.log(`[OCR] Primary pass: ${result.length} chars, confidence: ${Math.round(confidence)}`);
+
+  // Fix 9% artifact: Tesseract Korean model sometimes reads the % glyph as "9%"
+  // at certain scale factors. Detect suspicious N9% values (2+ digits before the 9)
+  // and verify with a second OCR pass at a different scale.
+  if (/\d{2,}9%/.test(result)) {
+    const altScale = primaryScale <= 2 ? 4 : 2;
+    console.log(`[OCR] Detected potential 9%% artifact, verifying at ${altScale}x...`);
+    const processed2 = await preprocessImage(imageBuffer, altScale);
+    const { data: { text: text2, confidence: conf2 } } = await w.recognize(processed2);
+    const result2 = postProcess(text2);
+    console.log(`[OCR] Verify pass: confidence ${Math.round(conf2)}`);
+
+    // Cross-reference: if primary has N9% and verify pass has N%, the 9 is an artifact
+    result = result.replace(/(\d{2,})(9%)/g, (match, num, suffix) => {
+      const corrected = num + '%';
+      if (result2.includes(corrected)) {
+        console.log(`[OCR] Fixed artifact: ${match} -> ${corrected}`);
+        return corrected;
+      }
+      return match;
+    });
+  }
+
+  if (!result) {
     console.warn('[OCR] WARNING: Empty OCR result. Check if language data loaded correctly.');
   }
-  return cleaned;
+  return result;
 }
