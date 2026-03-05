@@ -350,6 +350,85 @@ textarea:focus {
   border-color: #6ba3f7;
 }
 
+/* Estimated Price */
+.price-summary.estimated-price {
+  border-left-color: #f59e0b;
+}
+
+.price-summary.estimated-price .price-range {
+  color: #f59e0b;
+}
+
+/* Market Comparison Table */
+.market-comparison {
+  margin-top: 20px;
+}
+
+.market-table-wrap {
+  overflow-x: auto;
+  margin-top: 10px;
+  border-radius: 8px;
+  border: 1px solid #333;
+}
+
+.market-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.market-table th {
+  background: #16213e;
+  color: #c4a24f;
+  font-weight: 600;
+  padding: 8px 10px;
+  text-align: center;
+  border-bottom: 2px solid #333;
+}
+
+.market-table td {
+  padding: 6px 10px;
+  text-align: center;
+  border-bottom: 1px solid #222;
+}
+
+.market-table .price-cell {
+  font-weight: 600;
+  color: #4ade80;
+  text-align: right;
+}
+
+.market-table .user-row {
+  background: rgba(196, 162, 79, 0.15);
+  border-bottom: 2px solid #c4a24f;
+}
+
+.market-table .user-row td {
+  border-bottom: 2px solid #c4a24f;
+}
+
+.market-table .user-row .price-cell {
+  color: #c4a24f;
+}
+
+.market-table .user-stat {
+  color: #c4a24f;
+  font-weight: 700;
+}
+
+.market-table .stat-better {
+  color: #4ade80;
+}
+
+.market-table .stat-worse {
+  color: #f87171;
+}
+
+.market-table .stat-equal {
+  color: #6ba3f7;
+}
+
 /* Error */
 .error-msg {
   background: #2d1515;

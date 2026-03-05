@@ -12,31 +12,54 @@ try {
   d2ioTopics = JSON.parse(readFileSync(path.join(__dirname, '..', 'data', 'd2io-topics.json'), 'utf-8'));
 } catch { /* will be populated on first use */ }
 
-// diablo2.io stat filter URL param mapping
+// diablo2.io stat filter URL param mapping (for filtered link only)
 const D2IO_STAT_PARAMS = {
   mf: 'magicfind', ed: 'ed', fcr: 'fcr', frw: 'frw',
   fhr: 'fhr', ias: 'ias', allRes: 'resists', life: 'life', mana: 'mana',
 };
 
-// Traderie property ID mapping (stat key → prop ID)
+// Traderie property ID mapping (for filtered link only)
 const TRADERIE_PROPS = {
   allSkills: 587, allRes: 441, fireRes: 427, coldRes: 426,
   lightRes: 428, poisonRes: 401, life: 418, mana: 400,
   mf: 461, ias: 457, ed: 510, fhr: 430, pdr: 413,
 };
 
+// ChaossCube modifier ID → our stat key
+const CC_MOD_TO_KEY = {
+  47: 'ed', 48: 'ed', 50: 'addsDmg', 51: 'str', 52: 'dex', 53: 'vit',
+  54: 'energy', 55: 'mana', 56: 'life', 60: 'ias', 61: 'fcr', 62: 'fhr',
+  65: 'frw', 66: 'cb', 69: 'pdr', 70: 'lifeLeech', 71: 'manaLeech',
+  73: 'allSkills', 74: 'allAttr', 75: 'allRes', 76: 'fireRes', 77: 'coldRes',
+  78: 'lightRes', 80: 'poisonRes', 92: 'thorns', 94: 'mf', 183: 'slowerStamina',
+  200: 'enemyColdRes', 201: 'enemyFireRes', 202: 'enemyLightRes', 203: 'enemyPoisonRes',
+};
+
+// Stat display labels
+const STAT_LABELS = {
+  ed: 'ED%', mf: 'MF%', frw: 'FRW%', fcr: 'FCR%', ias: 'IAS%', fhr: 'FHR%',
+  allSkills: '올스킬', allRes: '전저항', allAttr: '전능력치',
+  str: '힘', vit: '활력', dex: '민첩', energy: '에너지',
+  life: '생명력', mana: '마나', cb: '크러싱', thorns: '반사피해',
+  pdr: '물리감소%', lifeLeech: '생흡%', manaLeech: '마흡%',
+  slowerStamina: '지구력', defense: '방어력', addsDmg: '추가피해',
+  enemyLightRes: '적번저', enemyFireRes: '적화저', enemyColdRes: '적냉저',
+};
+
 /**
- * Look up price data from diablo2.io, D2Trader.net, ChaossCube + generate Traderie link
+ * Look up price data from diablo2.io, D2Trader.net, ChaossCube.
+ * Search by name only (no stat/attribute filters), then compare user's item
+ * against market listings to gauge value.
  */
 export async function lookupPrice(itemNameEn, baseTypeEn, stats, options = {}) {
   const { ladder = false, itemNameKo, baseTypeKo, ethereal, sockets } = options;
 
   const lookups = [
-    lookupD2io(itemNameEn, { ladder, ethereal, sockets }),
-    lookupD2Trader(itemNameEn, { ethereal }),
+    lookupD2io(itemNameEn, { ladder }),
+    lookupD2Trader(itemNameEn),
   ];
   if (itemNameKo || baseTypeKo) {
-    lookups.push(lookupChaoscube(itemNameKo, baseTypeKo, ladder, { ethereal, sockets }));
+    lookups.push(lookupChaoscube(itemNameKo, baseTypeKo, ladder));
   }
 
   const results = await Promise.allSettled(lookups);
@@ -45,23 +68,27 @@ export async function lookupPrice(itemNameEn, baseTypeEn, stats, options = {}) {
   const d2trader = results[1].status === 'fulfilled' ? results[1].value : { error: results[1].reason?.message };
   const chaoscube = results[2]?.status === 'fulfilled' ? results[2].value : (results[2] ? { error: results[2].reason?.message } : { error: '한국어 아이템명 없음' });
 
-  // Generate Traderie filtered URL
+  // Generate filtered links for user reference (these HAVE attribute filters)
   const traderie = {
     url: generateTraderieUrl(itemNameEn, { ladder, ethereal, sockets, stats }),
   };
-
-  // Generate d2io filtered URL with stat params (for user to click)
-  if (d2io.url && stats) {
-    d2io.filteredUrl = buildD2ioFilteredUrl(d2io.url, stats);
+  if (d2io.url) {
+    d2io.filteredUrl = buildD2ioFilteredUrl(d2io.url, { stats, ethereal, sockets });
   }
 
-  // Stat comparison from D2Trader
+  // Stat comparison from D2Trader ranges
   let statComparison = null;
   if (d2trader.itemAttrs && stats) {
     statComparison = compareStats(stats, d2trader.itemAttrs);
   }
 
-  return { itemNameEn, d2io, d2trader, chaoscube, traderie, statComparison };
+  // Market comparison: compare user's item against CC listings
+  let marketComparison = null;
+  if (chaoscube.listings && chaoscube.listings.length > 0 && stats) {
+    marketComparison = buildMarketComparison(chaoscube.listings, stats, { ethereal, sockets });
+  }
+
+  return { itemNameEn, d2io, d2trader, chaoscube, traderie, statComparison, marketComparison };
 }
 
 // --- Traderie link generation ---
@@ -91,11 +118,10 @@ function generateTraderieUrl(itemNameEn, options = {}) {
 // --- diablo2.io ---
 
 async function lookupD2io(itemNameEn, options = {}) {
-  const { ladder = false, ethereal, sockets } = options;
+  const { ladder = false } = options;
 
   let pricecheckId = d2ioTopics[itemNameEn];
 
-  // Try case-insensitive search if not found
   if (!pricecheckId) {
     const lower = itemNameEn.toLowerCase();
     for (const [name, id] of Object.entries(d2ioTopics)) {
@@ -107,7 +133,6 @@ async function lookupD2io(itemNameEn, options = {}) {
   }
 
   if (!pricecheckId) {
-    // Try refreshing the topic index
     await refreshD2ioTopics();
     pricecheckId = d2ioTopics[itemNameEn];
   }
@@ -116,20 +141,11 @@ async function lookupD2io(itemNameEn, options = {}) {
     return { error: 'diablo2.io에서 아이템을 찾을 수 없습니다', searchUrl: `https://diablo2.io/database/?q=${encodeURIComponent(itemNameEn)}` };
   }
 
-  // Build URL with ethereal/socket filter params
-  const params = new URLSearchParams();
-  params.set('item', String(pricecheckId));
-  params.set('ladder', ladder ? '1' : '0');
-  params.set('legacy_resu', '2');
-  if (ethereal) params.set('eth', '1');
-  if (sockets != null && sockets > 0) params.set('imaxsockets', String(sockets));
-
-  const pcUrl = `https://diablo2.io/pricecheck.php?${params}`;
+  // Search by name + ladder only (no attribute filters)
+  const pcUrl = `https://diablo2.io/pricecheck.php?item=${pricecheckId}&ladder=${ladder ? '1' : '0'}&legacy_resu=2`;
 
   const res = await fetch(pcUrl, { headers: { 'User-Agent': USER_AGENT }, timeout: 10000 });
   const html = await res.text();
-
-  // Parse price entries
   const trades = parseD2ioTrades(html);
 
   return {
@@ -141,14 +157,19 @@ async function lookupD2io(itemNameEn, options = {}) {
 }
 
 /**
- * Build d2io URL with stat filters included (for user to click and refine)
+ * Build d2io URL with all filters (eth, sockets, stats) for user to click
  */
-function buildD2ioFilteredUrl(baseUrl, stats) {
+function buildD2ioFilteredUrl(baseUrl, options = {}) {
+  const { stats, ethereal, sockets } = options;
   try {
     const url = new URL(baseUrl);
-    for (const [key, paramName] of Object.entries(D2IO_STAT_PARAMS)) {
-      if (stats[key]?.value) {
-        url.searchParams.set(paramName, String(stats[key].value));
+    if (ethereal) url.searchParams.set('eth', '1');
+    if (sockets != null && sockets > 0) url.searchParams.set('imaxsockets', String(sockets));
+    if (stats) {
+      for (const [key, paramName] of Object.entries(D2IO_STAT_PARAMS)) {
+        if (stats[key]?.value) {
+          url.searchParams.set(paramName, String(stats[key].value));
+        }
       }
     }
     return url.toString();
@@ -167,24 +188,19 @@ async function refreshD2ioTopics() {
     const data = JSON.parse(raw);
 
     const items = {};
-    // Unique/set items (z-uniques-title)
     for (const [, name, id] of data.matchAll(/z-uniques-title">(.*?)<\/span>.*?zs-id">(\d+)<\/div>/g)) {
       items[name.trim()] = parseInt(id);
     }
-    // Base items (z-bone)
     for (const [, name, id] of data.matchAll(/z-bone">(.*?)<\/span>.*?zs-id">(\d+)<\/div>/g)) {
       const n = name.trim();
       if (!items[n]) items[n] = parseInt(id);
     }
-    // Base items (z-white) — common runeword bases like Archon Plate, Monarch, etc.
     for (const [, name, id] of data.matchAll(/z-white">(.*?)<\/span>.*?zs-id">(\d+)<\/div>/g)) {
       const n = name.trim();
       if (!items[n]) items[n] = parseInt(id);
     }
 
     d2ioTopics = items;
-
-    // Save to disk for next startup
     const { writeFileSync } = await import('fs');
     writeFileSync(path.join(__dirname, '..', 'data', 'd2io-topics.json'), JSON.stringify(items), 'utf-8');
     console.log(`Refreshed diablo2.io topic index: ${Object.keys(items).length} items`);
@@ -197,23 +213,18 @@ function parseD2ioTrades(html) {
   const trades = [];
   const $ = cheerio.load(html);
 
-  // Each price entry is a z-pc-li element
   $('li.z-pc-li, [class*="z-pc-li"]').each((_, el) => {
     const $el = $(el);
     const priceDesc = $el.find('.z-price-desc').text().trim();
     const dateText = $el.find('.z-relative-date').text().trim();
-
     if (!priceDesc) return;
-
-    const trade = {
+    trades.push({
       priceText: priceDesc.substring(0, 200),
       date: dateText,
       runeValue: extractRuneValue(priceDesc),
-    };
-    trades.push(trade);
+    });
   });
 
-  // Fallback: regex parse if cheerio couldn't find elements
   if (trades.length === 0) {
     const priceDescs = html.match(/z-price-desc">([\s\S]*?)<\/div>/g);
     if (priceDescs) {
@@ -232,7 +243,6 @@ function parseD2ioTrades(html) {
   return trades;
 }
 
-// Rune value hierarchy (in Ist runes, approximate)
 const RUNE_VALUES = {
   'El': 0, 'Eld': 0, 'Tir': 0, 'Nef': 0, 'Eth': 0, 'Ith': 0, 'Tal': 0, 'Ral': 0,
   'Ort': 0, 'Thul': 0, 'Amn': 0, 'Sol': 0, 'Shael': 0, 'Dol': 0, 'Hel': 0,
@@ -244,17 +254,14 @@ const RUNE_VALUES = {
 
 function extractRuneValue(text) {
   const cleaned = text.replace(/<[^>]+>/g, ' ').trim();
-
-  // Find the highest-value rune mentioned in the text
   let best = null;
   for (const [rune, val] of Object.entries(RUNE_VALUES)) {
-    if (val < 0.1) continue; // Skip trivial runes
+    if (val < 0.1) continue;
     const patterns = [
       new RegExp(`(\\d+)\\s*[x×]?\\s*${rune}\\b`, 'i'),
       new RegExp(`${rune}\\s*[x×]?\\s*(\\d+)`, 'i'),
       new RegExp(`\\b${rune}\\b`, 'i'),
     ];
-
     for (const pat of patterns) {
       const match = cleaned.match(pat);
       if (match) {
@@ -263,7 +270,7 @@ function extractRuneValue(text) {
         if (!best || istValue > best.istValue) {
           best = { rune, count, istValue };
         }
-        break; // Found this rune, check remaining runes for higher value
+        break;
       }
     }
   }
@@ -279,7 +286,6 @@ function summarizePrices(trades) {
   const max = Math.max(...istValues);
   const avg = istValues.reduce((a, b) => a + b, 0) / istValues.length;
 
-  // Find most common rune denomination
   const runeCounts = {};
   for (const t of valued) {
     const key = `${t.runeValue.count} ${t.runeValue.rune}`;
@@ -298,38 +304,22 @@ function summarizePrices(trades) {
 
 // --- D2Trader.net ---
 
-async function lookupD2Trader(itemNameEn, options = {}) {
-  const { ethereal } = options;
+async function lookupD2Trader(itemNameEn) {
   const slug = itemNameEn.toLowerCase()
-    .replace(/['']s\b/g, 's')  // possessive: 's → s
-    .replace(/['']/g, '')       // other apostrophes
+    .replace(/['']s\b/g, 's')
+    .replace(/['']/g, '')
     .replace(/[^a-z0-9-]/g, '-')
     .replace(/-+/g, '-')
     .replace(/^-|-$/g, '');
 
-  // Try unique, set, runeword in parallel
   const categories = ['unique', 'set', 'runeword'];
 
   const attempts = categories.map(async cat => {
     const prefix = cat === 'runeword' ? 'item/runeword' : `item/${cat}`;
-
-    // If ethereal, try ethereal variant first
-    if (ethereal) {
-      try {
-        const ethUrl = `https://d2trader.net/${prefix}/ethereal-${slug}-price/`;
-        const result = await fetchD2TraderPage(ethUrl, cat);
-        result.isEthereal = true;
-        return result;
-      } catch {
-        // Fall through to normal variant
-      }
-    }
-
     return fetchD2TraderPage(`https://d2trader.net/${prefix}/${slug}-price/`, cat);
   });
 
   const results = await Promise.allSettled(attempts);
-  // Prefer unique > set > runeword
   for (const r of results) {
     if (r.status === 'fulfilled') return r.value;
   }
@@ -367,23 +357,19 @@ async function fetchD2TraderPage(url, cat) {
 
 const CC_API = 'https://api.chaoscube.co.kr';
 const CC_WEB = 'https://www.chaoscube.co.kr';
-
-// Cache binding keys to avoid creating a new one every request (TTL: 10 minutes)
 const ccBindingCache = new Map();
 const CC_CACHE_TTL = 10 * 60 * 1000;
 
 /**
- * Search ChaossCube: use unique name if available, otherwise base type name.
- * No fallback from unique→base (base search would return unrelated unique items).
+ * Search ChaossCube by name only. No attribute filters.
  */
-async function lookupChaoscube(itemNameKo, baseTypeKo, ladder = false, filters = {}) {
+async function lookupChaoscube(itemNameKo, baseTypeKo, ladder = false) {
   const keyword = itemNameKo || baseTypeKo;
   if (!keyword) return { error: 'ChaossCube에서 아이템을 찾을 수 없습니다' };
-  return searchChaoscube(keyword, ladder, filters);
+  return searchChaoscube(keyword, ladder);
 }
 
-async function searchChaoscube(keyword, ladder = false, filters = {}) {
-  const { ethereal, sockets } = filters;
+async function searchChaoscube(keyword, ladder = false) {
   const searchConfig = {
     d2REXGameType: 'REIGN_OF_THE_WARLOCK',
     d2REXPlatformType: 'PC',
@@ -394,13 +380,10 @@ async function searchChaoscube(keyword, ladder = false, filters = {}) {
     onSalesBasicStatus: 'IN_PROGRESS_SALE',
     pageable: { page: 0, size: 30 },
     sortable: { column: 'create_date', direction: 'DESC' },
-    socketCounts: sockets ? [sockets] : [],
     keyword,
   };
-  if (ethereal) searchConfig.isEthereal = true;
 
-  // Step 1: Create search params → get binding key (with cache)
-  const cacheKey = `${keyword}:${ladder}:s${sockets || ''}:e${ethereal || ''}`;
+  const cacheKey = `${keyword}:${ladder}`;
   const cached = ccBindingCache.get(cacheKey);
   let bindingKey;
 
@@ -426,7 +409,6 @@ async function searchChaoscube(keyword, ladder = false, filters = {}) {
     ccBindingCache.set(cacheKey, { key: bindingKey, time: Date.now() });
   }
 
-  // Step 2: Fetch SSR page with binding key
   const pageRes = await fetch(`${CC_WEB}/exchange/list/${bindingKey}`, {
     headers: { 'User-Agent': USER_AGENT },
     timeout: 15000,
@@ -438,7 +420,6 @@ async function searchChaoscube(keyword, ladder = false, filters = {}) {
     return { error: 'ChaossCube 페이지 파싱 실패' };
   }
 
-  // Parse __NUXT__ data (Nuxt SSR embeds data as a JS expression)
   let nuxtData;
   try {
     nuxtData = new Function('return ' + nuxtMatch[1])();
@@ -451,7 +432,6 @@ async function searchChaoscube(keyword, ladder = false, filters = {}) {
     return { error: 'ChaossCube에서 아이템을 찾을 수 없습니다', url: `${CC_WEB}/exchange/list/${bindingKey}` };
   }
 
-  // Filter: only keep items whose name/preset/tags actually contain the keyword
   const kw = keyword.toLowerCase();
   const matched = d.items.filter(item => {
     const fields = [item.name, item.preset, item.title, ...(item.tags || [])].filter(Boolean);
@@ -462,13 +442,30 @@ async function searchChaoscube(keyword, ladder = false, filters = {}) {
     return { error: 'ChaossCube에서 아이템을 찾을 수 없습니다', url: `${CC_WEB}/exchange/list/${bindingKey}` };
   }
 
-  const listings = matched.map(item => ({
-    name: item.name || item.preset,
-    baseType: item.title || null,
-    rarity: item.rarity,
-    priceCP: item.amount,
-    ethereal: item.ethereal || false,
-  }));
+  // Extract rich listing data with stats
+  const listings = matched.map(item => {
+    const listing = {
+      name: item.name || item.preset,
+      baseType: item.title || null,
+      rarity: item.rarity,
+      priceCP: item.amount,
+      ethereal: item.ethereal || false,
+      socket: item.socket || 0,
+    };
+
+    // Extract stats from magicInfo (unique/magic properties)
+    const stats = {};
+    const allInfo = [...(item.magicInfo || []), ...(item.baseInfo || [])];
+    for (const mod of allInfo) {
+      const key = CC_MOD_TO_KEY[mod.id];
+      if (key && mod.value != null) {
+        stats[key] = mod.value;
+      }
+    }
+    listing.stats = stats;
+
+    return listing;
+  });
 
   const prices = listings.map(l => l.priceCP).filter(p => p > 0);
   const priceRange = prices.length > 0 ? {
@@ -480,19 +477,130 @@ async function searchChaoscube(keyword, ladder = false, filters = {}) {
 
   return {
     url: `${CC_WEB}/exchange/list/${bindingKey}`,
-    listings: listings.slice(0, 10),
+    listings: listings.slice(0, 20),
     total: d.total,
     priceRange,
     ladder,
   };
 }
 
-// --- Stat Comparison ---
+// --- Market Comparison ---
+
+/**
+ * Compare user's item against ChaossCube market listings.
+ * Finds variable stats, estimates value range based on similar listings.
+ */
+function buildMarketComparison(listings, userStats, userProps = {}) {
+  // Convert user stats to flat { key: value } map
+  const userFlat = {};
+  for (const [key, stat] of Object.entries(userStats)) {
+    if (stat.value !== undefined) userFlat[key] = stat.value;
+  }
+
+  // Find stats to display: stats that exist in user's item AND in at least one listing
+  // This ensures the user always sees their stats compared to the market
+  const listingStatKeys = new Set();
+  for (const l of listings) {
+    if (l.stats) Object.keys(l.stats).forEach(k => listingStatKeys.add(k));
+  }
+
+  const variableStats = [];
+  for (const key of Object.keys(userFlat)) {
+    if (listingStatKeys.has(key)) {
+      variableStats.push(key);
+    }
+  }
+
+  // Sort: prioritize commonly used trade stats
+  const statPriority = ['mf', 'ed', 'allSkills', 'allRes', 'allAttr', 'fcr', 'ias', 'fhr', 'frw',
+    'str', 'vit', 'dex', 'life', 'mana', 'cb', 'enemyLightRes', 'enemyFireRes', 'enemyColdRes',
+    'lifeLeech', 'manaLeech', 'thorns', 'pdr', 'defense'];
+  variableStats.sort((a, b) => {
+    const ai = statPriority.indexOf(a);
+    const bi = statPriority.indexOf(b);
+    return (ai === -1 ? 999 : ai) - (bi === -1 ? 999 : bi);
+  });
+
+  // Limit to top 6 variable stats for display
+  const displayStats = variableStats.slice(0, 6);
+
+  // Build comparison entries per listing
+  const compListings = listings
+    .filter(l => l.priceCP > 0)
+    .map(l => {
+      const entry = {
+        priceCP: l.priceCP,
+        ethereal: l.ethereal,
+        socket: l.socket,
+        stats: {},
+      };
+      for (const key of displayStats) {
+        entry.stats[key] = l.stats?.[key] ?? null;
+      }
+      return entry;
+    })
+    .sort((a, b) => a.priceCP - b.priceCP);
+
+  // User's stats for the display columns
+  const userDisplayStats = {};
+  for (const key of displayStats) {
+    userDisplayStats[key] = userFlat[key] ?? null;
+  }
+
+  // Estimate value range: find listings with similar key stat values
+  let estimatedRange = null;
+  if (compListings.length >= 2 && displayStats.length > 0) {
+    // Score each listing by how similar its stats are to the user's
+    const scored = compListings.map(l => {
+      let totalDiff = 0;
+      let compared = 0;
+      for (const key of displayStats) {
+        const userVal = userFlat[key];
+        const listVal = l.stats[key];
+        if (userVal != null && listVal != null) {
+          // Normalize difference by the stat range across listings
+          const allVals = listings.map(x => x.stats?.[key]).filter(v => v != null);
+          const range = Math.max(...allVals) - Math.min(...allVals);
+          if (range > 0) {
+            totalDiff += Math.abs(userVal - listVal) / range;
+            compared++;
+          }
+        }
+      }
+      const similarity = compared > 0 ? 1 - (totalDiff / compared) : 0;
+      return { ...l, similarity };
+    });
+
+    // Take top 5 most similar listings
+    scored.sort((a, b) => b.similarity - a.similarity);
+    const similar = scored.slice(0, Math.min(5, scored.length)).filter(s => s.similarity > 0.3);
+
+    if (similar.length > 0) {
+      const simPrices = similar.map(s => s.priceCP);
+      estimatedRange = {
+        minCP: Math.min(...simPrices),
+        maxCP: Math.max(...simPrices),
+        avgCP: Math.round(simPrices.reduce((a, b) => a + b, 0) / simPrices.length),
+        count: similar.length,
+      };
+    }
+  }
+
+  return {
+    displayStats: displayStats.map(k => ({ key: k, label: STAT_LABELS[k] || k })),
+    listings: compListings,
+    userStats: userDisplayStats,
+    userEthereal: userProps.ethereal || false,
+    userSockets: userProps.sockets || 0,
+    estimatedRange,
+  };
+}
+
+// --- Stat Comparison (D2Trader ranges) ---
 
 function compareStats(userStats, itemAttrs) {
   const comparison = [];
 
-  // Map D2Trader attr placeholders to our stat keys
   const attrMapping = {
     'Enhanced Defense': 'ed',
     'Enhanced Damage': 'ed',
@@ -521,7 +629,7 @@ function compareStats(userStats, itemAttrs) {
   };
 
   for (const attr of itemAttrs) {
-    if (!attr.values?.[0]?.varies) continue; // Only compare variable stats
+    if (!attr.values?.[0]?.varies) continue;
 
     const placeholder = attr.placeholder || '';
     let statKey = null;
@@ -549,7 +657,7 @@ function compareStats(userStats, itemAttrs) {
         userValue: userVal,
         min: range.min,
         max: range.max,
-        quality, // 0% = worst roll, 100% = perfect
+        quality,
         isPerfect: userVal >= range.max,
       });
     }

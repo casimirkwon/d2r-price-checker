@@ -9,6 +9,9 @@ const resultSection = document.getElementById('resultSection');
 const itemInfo = document.getElementById('itemInfo');
 const priceInfo = document.getElementById('priceInfo');
 const priceLoading = document.getElementById('priceLoading');
+const marketComparison = document.getElementById('marketComparison');
+const marketEstimate = document.getElementById('marketEstimate');
+const marketTable = document.getElementById('marketTable');
 const statComparison = document.getElementById('statComparison');
 const statBars = document.getElementById('statBars');
 const tradeHistory = document.getElementById('tradeHistory');
@@ -106,6 +109,7 @@ identifyBtn.addEventListener('click', async () => {
   identifyBtn.textContent = '분석 중...';
   resultSection.classList.remove('hidden');
   priceLoading.classList.remove('hidden');
+  marketComparison.classList.add('hidden');
   statComparison.classList.add('hidden');
   tradeHistory.classList.add('hidden');
   externalLinks.classList.add('hidden');
@@ -195,12 +199,26 @@ function renderItemInfo(item) {
 }
 
 function renderPriceInfo(data, itemName) {
-  // Price summary
   const d2io = data.d2io || {};
   const d2trader = data.d2trader || {};
   const cc = data.chaoscube || {};
 
+  // --- Price Summary ---
   let summaryHtml = '';
+
+  // Market estimate (from CC listing comparison)
+  const mc = data.marketComparison;
+  if (mc && mc.estimatedRange) {
+    const er = mc.estimatedRange;
+    const priceText = er.minCP === er.maxCP
+      ? `${er.minCP.toLocaleString()} CP`
+      : `${er.minCP.toLocaleString()}~${er.maxCP.toLocaleString()} CP`;
+    summaryHtml += `
+      <div class="price-summary estimated-price">
+        <div class="price-range">${priceText}</div>
+        <div class="price-detail">유사 매물 ${er.count}건 기준 추정 가치 (평균 ${er.avgCP.toLocaleString()} CP)</div>
+      </div>`;
+  }
 
   if (d2io.priceRange) {
     const pr = d2io.priceRange;
@@ -227,7 +245,7 @@ function renderPriceInfo(data, itemName) {
       </div>`;
   }
 
-  if (cc.priceRange) {
+  if (cc.priceRange && !(mc && mc.estimatedRange)) {
     const pr = cc.priceRange;
     const priceText = pr.minCP === pr.maxCP
       ? `${pr.minCP.toLocaleString()} CP`
@@ -249,7 +267,13 @@ function renderPriceInfo(data, itemName) {
 
   priceInfo.innerHTML = summaryHtml;
 
-  // Stat comparison
+  // --- Market Comparison Table ---
+  if (mc && mc.listings && mc.listings.length > 0 && mc.displayStats.length > 0) {
+    marketComparison.classList.remove('hidden');
+    renderMarketTable(mc);
+  }
+
+  // --- Stat quality bars (D2Trader) ---
   if (data.statComparison && data.statComparison.length > 0) {
     statComparison.classList.remove('hidden');
     let barsHtml = '';
@@ -269,7 +293,7 @@ function renderPriceInfo(data, itemName) {
     statBars.innerHTML = barsHtml;
   }
 
-  // Trade history
+  // --- Trade history ---
   if (d2io.trades && d2io.trades.length > 0) {
     tradeHistory.classList.remove('hidden');
     let tradesHtml = '';
@@ -283,17 +307,17 @@ function renderPriceInfo(data, itemName) {
     tradeList.innerHTML = tradesHtml;
   }
 
-  // External links
+  // --- External links ---
   externalLinks.classList.remove('hidden');
   const encodedName = encodeURIComponent(itemName);
   let linksHtml = '';
 
   if (d2io.filteredUrl) {
-    linksHtml += `<a href="${d2io.filteredUrl}" target="_blank" class="link-item">diablo2.io 시세 (필터)</a>`;
-  } else if (d2io.url) {
+    linksHtml += `<a href="${d2io.filteredUrl}" target="_blank" class="link-item">diablo2.io (필터)</a>`;
+  }
+  if (d2io.url) {
     linksHtml += `<a href="${d2io.url}" target="_blank" class="link-item">diablo2.io 시세</a>`;
   }
-  linksHtml += `<a href="https://diablo2.io/database/?q=${encodedName}" target="_blank" class="link-item">diablo2.io DB</a>`;
 
   if (d2trader.url) {
     linksHtml += `<a href="${d2trader.url}" target="_blank" class="link-item">D2Trader.net</a>`;
@@ -306,11 +330,53 @@ function renderPriceInfo(data, itemName) {
   const traderie = data.traderie || {};
   if (traderie.url) {
     linksHtml += `<a href="${traderie.url}" target="_blank" class="link-item">Traderie (필터)</a>`;
-  } else {
-    linksHtml += `<a href="https://traderie.com/diablo2resurrected/products?search=${encodedName}" target="_blank" class="link-item">Traderie</a>`;
   }
 
   linkList.innerHTML = linksHtml;
+}
+
+function renderMarketTable(mc) {
+  const { displayStats, listings, userStats, userEthereal, userSockets } = mc;
+
+  // Build header
+  let html = '<thead><tr><th>가격</th>';
+  if (listings.some(l => l.ethereal)) html += '<th>무형</th>';
+  if (listings.some(l => l.socket > 0)) html += '<th>소켓</th>';
+  for (const ds of displayStats) {
+    html += `<th>${escapeHtml(ds.label)}</th>`;
+  }
+  html += '</tr></thead><tbody>';
+
+  // User's item row (highlighted at top)
+  html += '<tr class="user-row"><td class="price-cell">내 아이템</td>';
+  if (listings.some(l => l.ethereal)) html += `<td>${userEthereal ? 'O' : '-'}</td>`;
+  if (listings.some(l => l.socket > 0)) html += `<td>${userSockets || '-'}</td>`;
+  for (const ds of displayStats) {
+    const val = userStats[ds.key];
+    html += `<td class="user-stat">${val != null ? val : '-'}</td>`;
+  }
+  html += '</tr>';
+
+  // Listing rows
+  for (const listing of listings) {
+    html += '<tr>';
+    html += `<td class="price-cell">${listing.priceCP.toLocaleString()} CP</td>`;
+    if (listings.some(l => l.ethereal)) html += `<td>${listing.ethereal ? 'O' : '-'}</td>`;
+    if (listings.some(l => l.socket > 0)) html += `<td>${listing.socket || '-'}</td>`;
+    for (const ds of displayStats) {
+      const listVal = listing.stats[ds.key];
+      const userVal = userStats[ds.key];
+      let cls = '';
+      if (listVal != null && userVal != null) {
+        cls = userVal > listVal ? 'stat-better' : userVal < listVal ? 'stat-worse' : 'stat-equal';
+      }
+      html += `<td class="${cls}">${listVal != null ? listVal : '-'}</td>`;
+    }
+    html += '</tr>';
+  }
+
+  html += '</tbody>';
+  marketTable.innerHTML = html;
 }
 
 function escapeHtml(str) {
