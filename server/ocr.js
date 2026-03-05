@@ -72,6 +72,7 @@ function postProcess(text) {
     .replace(/ㄱ[|l]/g, '기')         // ㄱ| → 기
     .replace(/파괴\s*물가/g, '파괴 불가') // 물가 → 불가
     .replace(/모는\s*기술/g, '모든 기술') // 모는 → 모든
+    .replace(/\|(?=\s*\d)/g, '+')     // |N → +N (OCR confuses + with |)
     .replace(/\*(\d)/g, '+$1')        // *N → +N
     .replace(/\*\+/g, '+')            // *+ → +
     .replace(/!(\d)/g, '1$1')         // !N → 1N
