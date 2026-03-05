@@ -1,5 +1,4 @@
 node_modules/
-*.traineddata
 *.log
 .DS_Store
 Thumbs.db
