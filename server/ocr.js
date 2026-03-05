@@ -75,15 +75,22 @@ export async function runOCR(imageBuffer) {
   console.log(`[OCR] Processing image (${imageBuffer.length} bytes)...`);
   const meta = await sharp(imageBuffer).metadata();
 
-  // Preprocessing: flatten alpha, add padding, upscale very small images
-  // Padding helps PaddleOCR detect text near image edges
+  // Preprocessing: flatten alpha, add padding, conditional upscale
+  // - Padding helps PaddleOCR detect text near image edges
+  // - Small images (<300px): upscale 2-3x to reach ~600px
+  // - Medium images (300-499px): pad only (upscale hurts these)
+  // - Large images (>=500px): 1.5x upscale improves thin char recognition (:, /)
   const pad = 20;
   let img = sharp(imageBuffer).flatten({ background: '#000000' })
     .extend({ top: pad, bottom: pad, left: pad, right: pad, background: '#000000' });
+  const paddedWidth = meta.width + pad * 2;
   if (meta.width < 300) {
     const scale = Math.max(2, Math.round(600 / meta.width));
-    img = img.resize({ width: (meta.width + pad * 2) * scale, kernel: 'lanczos3' });
+    img = img.resize({ width: paddedWidth * scale, kernel: 'lanczos3' });
     console.log(`[OCR] Upscaled ${scale}x (${meta.width}px -> ${meta.width * scale}px)`);
+  } else if (meta.width >= 500) {
+    img = img.resize({ width: Math.round(paddedWidth * 1.5), kernel: 'lanczos3' });
+    console.log(`[OCR] Upscaled 1.5x (${meta.width}px -> ${Math.round(meta.width * 1.5)}px)`);
   }
   const processed = await img.png().toBuffer();
 
@@ -104,11 +111,17 @@ export async function runOCR(imageBuffer) {
     // Sort by Y position (top to bottom)
     filtered.sort((a, b) => a.box[0][1] - b.box[0][1]);
 
-    // Clean each line: strip stray Latin chars between Korean/digits (upscale artifact)
+    // Clean each line: strip stray chars, fix thin-char OCR issues, trim bg noise
     const lines = filtered.map(item =>
       item.text
         .replace(/^[A-Z]\s+(?=[\uAC00-\uD7A3])/, '')   // leading stray "B 힘" → "힘"
         .replace(/([\uAC00-\uD7A3])\s*[A-Z](?=\d)/g, '$1')  // "피해 H15" → "피해15"
+        .replace(/내구도[:\s]*(\d+)\s+[/]?\s*(\d+)/, '내구도: $1/$2')  // "내구도 24 24" → "내구도: 24/24"
+        .replace(/\.\.\s*(\d)/, ': $1')   // "레벨 .. 57" → "레벨 : 57"
+        .replace(/[·•]\s*/, ': ')         // "내구도 • 23" → "내구도 : 23"
+        .replace(/[—–]/g, '-')            // em/en dash → hyphen
+        .replace(/(추가|증가|감소|훔침)\s+\S+$/, '$1')  // strip trailing bg noise after stat end
+        .replace(/([+]\d+)\s+[나나]\s*\d+$/, '$1')      // "+5 나 238" → "+5"
     );
     const text = lines.join('\n');
     console.log(`[OCR] Detected ${filtered.length} lines, ${text.length} chars`);
