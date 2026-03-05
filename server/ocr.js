@@ -1,127 +1,123 @@
-import Tesseract from 'tesseract.js';
+import OcrModule from '@gutenye/ocr-node';
 import sharp from 'sharp';
 import path from 'path';
+import fs from 'fs';
+import os from 'os';
+import { Readable } from 'stream';
+import { pipeline } from 'stream/promises';
+import { createWriteStream } from 'fs';
 import { fileURLToPath } from 'url';
 
+const Ocr = OcrModule.default || OcrModule;
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-const TESSDATA_PATH = path.join(__dirname, '..', 'data', 'tessdata');
+const MODELS_DIR = path.join(__dirname, '..', 'data', 'paddle-models');
 
-/**
- * Preprocess a D2R screenshot for better OCR accuracy.
- * D2R tooltips have light/gold/blue text on very dark background.
- * Strategy: scale up, color-aware grayscale, denoise, sharpen, binarize.
- */
-async function preprocessImage(buffer, scale) {
-  const meta = await sharp(buffer).metadata();
-  if (!scale) {
-    scale = Math.max(2, Math.round(2400 / meta.width));
-  }
+const MODELS = [
+  {
+    name: 'detection (v5)',
+    path: path.join(MODELS_DIR, 'detection', 'det-v5.onnx'),
+    url: 'https://huggingface.co/monkt/paddleocr-onnx/resolve/main/detection/v5/det.onnx',
+    size: '84MB',
+  },
+  {
+    name: 'recognition (korean)',
+    path: path.join(MODELS_DIR, 'korean', 'rec.onnx'),
+    url: 'https://huggingface.co/monkt/paddleocr-onnx/resolve/main/languages/korean/rec.onnx',
+    size: '13MB',
+  },
+  {
+    name: 'dictionary (korean)',
+    path: path.join(MODELS_DIR, 'korean', 'dict.txt'),
+    url: 'https://huggingface.co/monkt/paddleocr-onnx/resolve/main/languages/korean/dict.txt',
+    size: '47KB',
+  },
+];
 
-  return sharp(buffer)
-    .flatten({ background: '#000000' })  // remove alpha channel (clipboard PNG)
-    .resize({ width: meta.width * scale, kernel: 'lanczos3' })
-    // Equal-weight grayscale: standard grayscale (0.21R+0.72G+0.07B) under-weights
-    // red and blue channels. D2R text is gold (high R,G), blue (high B), white (all high).
-    // Using [0.4, 0.4, 0.4] ensures all colored text stays bright after conversion.
-    .recomb([
-      [0.4, 0.4, 0.4],
-      [0.4, 0.4, 0.4],
-      [0.4, 0.4, 0.4],
-    ])
-    .grayscale()
-    .median(3)                    // Remove salt-and-pepper noise
-    .normalize()                  // Use full dynamic range
-    .sharpen({ sigma: 1.5 })     // Sharpen character edges for clearer glyphs
-    .linear(2.0, -80)            // High contrast (slightly less aggressive than before)
-    .threshold(85)               // Binarize: keep bright text
-    .negate()                    // Invert: dark text on white bg (Tesseract prefers this)
-    .png()
-    .toBuffer();
+async function downloadModel(model) {
+  const dir = path.dirname(model.path);
+  fs.mkdirSync(dir, { recursive: true });
+  console.log(`[OCR] Downloading ${model.name} (~${model.size})...`);
+  const response = await fetch(model.url, { redirect: 'follow' });
+  if (!response.ok) throw new Error(`Download failed: ${response.status} ${response.statusText}`);
+  const nodeStream = Readable.fromWeb(response.body);
+  await pipeline(nodeStream, createWriteStream(model.path));
+  const stat = fs.statSync(model.path);
+  console.log(`[OCR] Downloaded ${model.name} (${(stat.size / 1024 / 1024).toFixed(1)}MB)`);
 }
 
-let worker = null;
+async function ensureModels() {
+  for (const model of MODELS) {
+    if (!fs.existsSync(model.path)) {
+      await downloadModel(model);
+    }
+  }
+}
 
-async function getWorker() {
-  if (!worker) {
-    console.log('[OCR] Initializing Tesseract worker (kor, best model)...');
-    worker = await Tesseract.createWorker('kor', 1, {
-      langPath: TESSDATA_PATH,
-      logger: m => {
-        if (m.status === 'loading tesseract core' || m.status === 'loading language traineddata')
-          console.log(`[OCR] ${m.status}: ${Math.round((m.progress || 0) * 100)}%`);
+let ocr = null;
+
+async function getOcr() {
+  if (!ocr) {
+    console.log('[OCR] Initializing PaddleOCR (Korean)...');
+    await ensureModels();
+    ocr = await Ocr.create({
+      models: {
+        detectionPath: MODELS[0].path,
+        recognitionPath: MODELS[1].path,
+        dictionaryPath: MODELS[2].path,
       },
     });
-    // PSM 6 = assume a single uniform block of text
-    await worker.setParameters({
-      tessedit_pageseg_mode: '6',
-      preserve_interword_spaces: '1',
-    });
-    console.log('[OCR] Tesseract worker ready (best model).');
+    console.log('[OCR] PaddleOCR ready.');
   }
-  return worker;
-}
-
-/**
- * Post-process raw OCR text: fix common artifacts, strip noise.
- */
-function postProcess(text) {
-  return text
-    .replace(/[|l][|l]술/g, '기술')   // ||술 → 기술
-    .replace(/7[|l]술/g, '기술')      // 7|술 → 기술
-    .replace(/1[|l]술/g, '기술')      // 1|술 → 기술
-    .replace(/ㄱ[|l]/g, '기')         // ㄱ| → 기
-    .replace(/파괴\s*물가/g, '파괴 불가') // 물가 → 불가
-    .replace(/모는\s*기술/g, '모든 기술') // 모는 → 모든
-    .replace(/\|(?=\s*\d)/g, '+')     // |N → +N (OCR confuses + with |)
-    .replace(/\*(\d)/g, '+$1')        // *N → +N
-    .replace(/\*\+/g, '+')            // *+ → +
-    .replace(/!(\d)/g, '1$1')         // !N → 1N
-    .replace(/!(?=\s|$)/g, '1')       // ! at end → 1
-    .split('\n')
-    .map(line => line.replace(/[^\uAC00-\uD7A3\u3131-\u3163\u1100-\u11FF\d\s+\-/:()%.~,]/g, '').trim())
-    .join('\n')
-    .trim();
+  return ocr;
 }
 
 export async function runOCR(imageBuffer) {
   console.log(`[OCR] Processing image (${imageBuffer.length} bytes)...`);
   const meta = await sharp(imageBuffer).metadata();
 
-  // Primary pass: target ~2400px wide
-  const primaryScale = Math.max(2, Math.round(2400 / meta.width));
-  const processed = await preprocessImage(imageBuffer, primaryScale);
-  console.log(`[OCR] Preprocessed (${primaryScale}x, ${meta.width * primaryScale}px), running recognition...`);
+  // Preprocessing: flatten alpha, add padding, upscale very small images
+  // Padding helps PaddleOCR detect text near image edges
+  const pad = 20;
+  let img = sharp(imageBuffer).flatten({ background: '#000000' })
+    .extend({ top: pad, bottom: pad, left: pad, right: pad, background: '#000000' });
+  if (meta.width < 300) {
+    const scale = Math.max(2, Math.round(600 / meta.width));
+    img = img.resize({ width: (meta.width + pad * 2) * scale, kernel: 'lanczos3' });
+    console.log(`[OCR] Upscaled ${scale}x (${meta.width}px -> ${meta.width * scale}px)`);
+  }
+  const processed = await img.png().toBuffer();
 
-  const w = await getWorker();
-  const { data: { text, confidence } } = await w.recognize(processed);
-  let result = postProcess(text);
+  const tmpPath = path.join(os.tmpdir(), `d2r-ocr-${Date.now()}.png`);
+  try {
+    fs.writeFileSync(tmpPath, processed);
+    const engine = await getOcr();
+    const result = await engine.detect(tmpPath);
+    const items = Array.from(result);
 
-  console.log(`[OCR] Primary pass: ${result.length} chars, confidence: ${Math.round(confidence)}`);
-
-  // Fix 9% artifact: Tesseract Korean model sometimes reads the % glyph as "9%"
-  // at certain scale factors. Detect suspicious N9% values (2+ digits before the 9)
-  // and verify with a second OCR pass at a different scale.
-  if (/\d{2,}9%/.test(result)) {
-    const altScale = primaryScale <= 2 ? 4 : 2;
-    console.log(`[OCR] Detected potential 9%% artifact, verifying at ${altScale}x...`);
-    const processed2 = await preprocessImage(imageBuffer, altScale);
-    const { data: { text: text2, confidence: conf2 } } = await w.recognize(processed2);
-    const result2 = postProcess(text2);
-    console.log(`[OCR] Verify pass: confidence ${Math.round(conf2)}`);
-
-    // Cross-reference: if primary has N9% and verify pass has N%, the 9 is an artifact
-    result = result.replace(/(\d{2,})(9%)/g, (match, num, suffix) => {
-      const corrected = num + '%';
-      if (result2.includes(corrected)) {
-        console.log(`[OCR] Fixed artifact: ${match} -> ${corrected}`);
-        return corrected;
-      }
-      return match;
+    // Filter noise: stray short text with low confidence
+    const filtered = items.filter(item => {
+      if (item.text.length <= 1 && item.mean < 0.95) return false;
+      if (/^[A-Z]{1,2}$/.test(item.text) && item.mean < 0.90) return false;
+      return true;
     });
-  }
 
-  if (!result) {
-    console.warn('[OCR] WARNING: Empty OCR result. Check if language data loaded correctly.');
+    // Sort by Y position (top to bottom)
+    filtered.sort((a, b) => a.box[0][1] - b.box[0][1]);
+
+    // Clean each line: strip stray Latin chars between Korean/digits (upscale artifact)
+    const lines = filtered.map(item =>
+      item.text
+        .replace(/^[A-Z]\s+(?=[\uAC00-\uD7A3])/, '')   // leading stray "B 힘" → "힘"
+        .replace(/([\uAC00-\uD7A3])\s*[A-Z](?=\d)/g, '$1')  // "피해 H15" → "피해15"
+    );
+    const text = lines.join('\n');
+    console.log(`[OCR] Detected ${filtered.length} lines, ${text.length} chars`);
+
+    if (!text) {
+      console.warn('[OCR] WARNING: Empty OCR result.');
+    }
+    return text;
+  } finally {
+    try { fs.unlinkSync(tmpPath); } catch {}
   }
-  return result;
 }
