@@ -142,6 +142,7 @@ export async function runOCR(imageBuffer) {
         .replace(/\.\.\s*(\d)/, ': $1')   // "레벨 .. 57" → "레벨 : 57"
         .replace(/[·•]\s*/, ': ')         // "내구도 • 23" → "내구도 : 23"
         .replace(/[—–]/g, '-')            // em/en dash → hyphen
+        .replace(/(피해[!:.\s]*?)(\d+)\s+(\d+)/, '$1$2-$3')  // "피해 5 30" → "피해 5-30" (dash lost by brightness filter)
         .replace(/(추가|증가|감소|훔침)\s+\S+$/, '$1')  // strip trailing bg noise after stat end
         .replace(/([+]\d+)\s+[나나]\s*\d+$/, '$1')      // "+5 나 238" → "+5"
     );
