@@ -373,26 +373,13 @@ const ccBindingCache = new Map();
 const CC_CACHE_TTL = 10 * 60 * 1000;
 
 /**
- * Search ChaossCube: try unique name first, fall back to base type name
+ * Search ChaossCube: use unique name if available, otherwise base type name.
+ * No fallback from unique→base (base search would return unrelated unique items).
  */
 async function lookupChaoscube(itemNameKo, baseTypeKo, ladder = false, filters = {}) {
-  // Try unique name first
-  if (itemNameKo) {
-    const result = await searchChaoscube(itemNameKo, ladder, filters);
-    if (result.priceRange || (result.listings && result.listings.length > 0)) {
-      return result;
-    }
-  }
-
-  // Fall back to base type name if unique name didn't find anything
-  if (baseTypeKo && baseTypeKo !== itemNameKo) {
-    const result = await searchChaoscube(baseTypeKo, ladder, filters);
-    if (result.priceRange || (result.listings && result.listings.length > 0)) {
-      return result;
-    }
-  }
-
-  return { error: 'ChaossCube에서 아이템을 찾을 수 없습니다' };
+  const keyword = itemNameKo || baseTypeKo;
+  if (!keyword) return { error: 'ChaossCube에서 아이템을 찾을 수 없습니다' };
+  return searchChaoscube(keyword, ladder, filters);
 }
 
 async function searchChaoscube(keyword, ladder = false, filters = {}) {
