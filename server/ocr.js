@@ -53,6 +53,22 @@ async function ensureModels() {
   }
 }
 
+async function brightnessFilter(buffer, threshold) {
+  const { data, info } = await sharp(buffer)
+    .flatten({ background: '#000000' })
+    .raw()
+    .toBuffer({ resolveWithObject: true });
+  const pixels = Buffer.from(data);
+  for (let i = 0; i < pixels.length; i += info.channels) {
+    if (Math.max(pixels[i], pixels[i + 1], pixels[i + 2]) < threshold) {
+      pixels[i] = pixels[i + 1] = pixels[i + 2] = 0;
+    }
+  }
+  return sharp(pixels, {
+    raw: { width: info.width, height: info.height, channels: info.channels }
+  }).png().toBuffer();
+}
+
 let ocr = null;
 
 async function getOcr() {
@@ -75,13 +91,19 @@ export async function runOCR(imageBuffer) {
   console.log(`[OCR] Processing image (${imageBuffer.length} bytes)...`);
   const meta = await sharp(imageBuffer).metadata();
 
-  // Preprocessing: flatten alpha, add padding, conditional upscale
+  // Preprocessing: brightness filter, flatten alpha, add padding, conditional upscale
+  // - Brightness filter (>=500px only): removes faint background UI text
   // - Padding helps PaddleOCR detect text near image edges
   // - Small images (<300px): upscale 2-3x to reach ~600px
   // - Medium images (300-499px): pad only (upscale hurts these)
   // - Large images (>=500px): 1.5x upscale improves thin char recognition (:, /)
+  let srcBuffer = imageBuffer;
+  if (meta.width >= 500) {
+    srcBuffer = await brightnessFilter(imageBuffer, 30);
+    console.log(`[OCR] Applied brightness filter (threshold=30) for ${meta.width}px image`);
+  }
   const pad = 20;
-  let img = sharp(imageBuffer).flatten({ background: '#000000' })
+  let img = sharp(srcBuffer).flatten({ background: '#000000' })
     .extend({ top: pad, bottom: pad, left: pad, right: pad, background: '#000000' });
   const paddedWidth = meta.width + pad * 2;
   if (meta.width < 300) {
