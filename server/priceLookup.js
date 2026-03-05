@@ -44,15 +44,32 @@ const CC_MOD_TO_KEY = {
 
 // Stat display labels
 const STAT_LABELS = {
-  ed: 'ED%', mf: 'MF%', frw: 'FRW%', fcr: 'FCR%', ias: 'IAS%', fhr: 'FHR%',
+  ed: 'ED%', mf: 'MF%', frw: 'FRW%', fcr: 'FCR%', ias: 'IAS%', fhr: 'FHR%', fbr: 'FBR%',
   allSkills: '올스킬', allRes: '전저항', allAttr: '전능력치',
-  str: '힘', vit: '활력', dex: '민첩', energy: '에너지',
-  life: '생명력', mana: '마나', cb: '크러싱', thorns: '반사피해',
-  pdr: '물리감소%', lifeLeech: '생흡%', manaLeech: '마흡%',
-  slowerStamina: '지구력', defense: '방어력', addsDmg: '추가피해', minDmg: '최소피해', maxDmg: '최대피해',
+  str: '힘', vit: '활력', dex: '민첩', energy: '마력',
+  life: '생명력', mana: '마나',
+  cb: '강타', deadlyStrike: '치명적공격', openWounds: '상처악화', thorns: '반사피해',
+  lifeLeech: '생흡%', manaLeech: '마흡%',
+  defense: '방어력', addsDmg: '추가피해', minDmg: '최소피해', maxDmg: '최대피해', flatDmg: '피해',
+  addsFireDmg: '화염추가피해', addsColdDmg: '냉기추가피해', addsLightDmg: '번개추가피해', addsMagicDmg: '마법추가피해', addsPoisonDmg: '독추가피해',
+  dmgDemons: '악마피해%', dmgUndead: '언데드피해%',
+  ar: '명중률', arBonus: '명중률보너스%', arDemons: '악마명중률', arUndead: '언데드명중률',
+  dr: '피해감소', mdr: '마법피해감소', pdr: '물리감소%',
   enemyLightRes: '적번저', enemyFireRes: '적화저', enemyColdRes: '적냉저', enemyPoisonRes: '적독저',
-  lifePerKill: '킬당생명', manaPerKill: '킬당마나',
-  coldAbsorb: '냉흡수', fireAbsorb: '화흡수', lightAbsorb: '번흡수',
+  lightSkillDmg: '번개기술피해%', fireSkillDmg: '화염기술피해%', coldSkillDmg: '냉기기술피해%', poisonSkillDmg: '독기술피해%',
+  coldAbsorb: '냉흡수', fireAbsorb: '화흡수', lightAbsorb: '번흡수', magicAbsorb: '마법흡수',
+  coldAbsorbPct: '냉흡수%', fireAbsorbPct: '화흡수%', lightAbsorbPct: '번흡수%',
+  lifePerKill: '적처치생명', manaPerKill: '적처치마나', lifePerDemonKill: '악마처치생명',
+  extraGold: '추가골드%', dmgToMana: '피해→마나%',
+  replenishLife: '생명력회복', regenMana: '마나재생%',
+  slowerStamina: '지구력', maxStamina: '최대지구력',
+  reqReduced: '착용조건%', targetDef: '대상방어력%', slowTarget: '대상감속%',
+  blockChance: '막기확률%', lightRadius: '시야',
+  defVsMissile: '원거리방어력', defVsMelee: '근접방어력',
+  maxFireRes: '최대화저%', maxColdRes: '최대냉저%', maxLightRes: '최대번저%', maxPoisonRes: '최대독저%',
+  maxLifePct: '최대생명%', maxManaPct: '최대마나%',
+  expGain: '경험치%', poisonLenReduced: '독시간감소%',
+  flee: '도주%', poisonDmg: '독피해',
 };
 
 /**
@@ -706,11 +723,65 @@ const PLACEHOLDER_TO_KEY = {
   'Absorbs Lightning': 'lightAbsorb',
   'Maximum Damage': 'maxDmg',
   'Minimum Damage': 'minDmg',
+  'Damage to Demons': 'dmgDemons',
+  'Damage to Undead': 'dmgUndead',
+  'Attack Rating': 'ar',
+  'Bonus to Attack Rating': 'arBonus',
+  'Attack Rating Against Demons': 'arDemons',
+  'Attack Rating Against Undead': 'arUndead',
+  'Deadly Strike': 'deadlyStrike',
+  'Open Wounds': 'openWounds',
+  'Adds Fire Damage': 'addsFireDmg',
+  'fire damage': 'addsFireDmg',
+  'Adds Cold Damage': 'addsColdDmg',
+  'cold damage': 'addsColdDmg',
+  'Adds Lightning Damage': 'addsLightDmg',
+  'lightning damage': 'addsLightDmg',
+  'Adds Magic Damage': 'addsMagicDmg',
+  'magic damage': 'addsMagicDmg',
+  'Adds Damage': 'addsDmg',
+  'Poison Damage': 'poisonDmg',
+  'Replenish Life': 'replenishLife',
+  'Regenerate Mana': 'regenMana',
+  'Requirements': 'reqReduced',
+  'Target Defense': 'targetDef',
+  'Slows Target': 'slowTarget',
+  'Chance of Blocking': 'blockChance',
+  'Faster Block Rate': 'fbr',
+  'Maximum Stamina': 'maxStamina',
+  'Slower Stamina': 'slowerStamina',
+  'Maximum Fire Resist': 'maxFireRes',
+  'Maximum Cold Resist': 'maxColdRes',
+  'Maximum Lightning Resist': 'maxLightRes',
+  'Maximum Poison Resist': 'maxPoisonRes',
+  'Maximum Life': 'maxLifePct',
+  'Maximum Mana': 'maxManaPct',
+  'Experience Gained': 'expGain',
+  'Poison Length': 'poisonLenReduced',
+  'Extra Gold': 'extraGold',
+  'Damage Taken Goes': 'dmgToMana',
+  'Light Radius': 'lightRadius',
+  'Defense Vs. Missile': 'defVsMissile',
+  'Defense vs. Melee': 'defVsMelee',
+  'Fire Absorb': 'fireAbsorbPct',
+  'Cold Absorb': 'coldAbsorbPct',
+  'Lightning Absorb': 'lightAbsorbPct',
+  'Magic Absorb': 'magicAbsorb',
+  'Fire Skill Damage': 'fireSkillDmg',
+  'Cold Skill Damage': 'coldSkillDmg',
+  'Lightning Skill Damage': 'lightSkillDmg',
+  'Poison Skill Damage': 'poisonSkillDmg',
+  'Life after each Demon': 'lifePerDemonKill',
+  'Piercing Attack': 'pierce',
+  'Hit Causes Monster': 'flee',
+  'Critical Strike': 'criticalStrike',
 };
 
 function placeholderToStatKey(placeholder) {
+  // Strip value placeholders (#, +, -, %) to match keywords like "Adds Cold Damage"
+  const cleaned = placeholder.replace(/[#%+\-]/g, '').replace(/\s+/g, ' ').trim();
   for (const [keyword, key] of Object.entries(PLACEHOLDER_TO_KEY)) {
-    if (placeholder.includes(keyword)) return key;
+    if (cleaned.includes(keyword) || placeholder.includes(keyword)) return key;
   }
   return null;
 }
@@ -843,7 +914,7 @@ function compareWithLocalDb(itemNameEn, userStats) {
       min: s.min,
       max: s.max,
       varies: s.varies,
-      userValue: statKey && userStats[statKey] ? userStats[statKey].value : null,
+      userValue: statKey && userStats[statKey] ? (userStats[statKey].value ?? userStats[statKey].max ?? null) : null,
     });
   }
 
@@ -892,7 +963,7 @@ function buildPerfectSpecOnly(item, itemNameEn, userStats) {
       min: s.min,
       max: s.max,
       varies: s.varies,
-      userValue: statKey && userStats[statKey] ? userStats[statKey].value : null,
+      userValue: statKey && userStats[statKey] ? (userStats[statKey].value ?? userStats[statKey].max ?? null) : null,
     });
   }
 

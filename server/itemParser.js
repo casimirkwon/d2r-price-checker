@@ -156,60 +156,209 @@ function fuzzyMatch(input) {
 }
 
 // Korean stat patterns from D2R tooltips
-// OCR commonly confuses: 기→ㄱ|/ㄱl, 력→럭/럭, 확률→왁률/왁릉, 치→지, O→0, [→1
+// Reference: https://sangminem.tistory.com/794 (D2R item-modifiers.json 한/영 매칭표)
+// OCR commonly confuses: 기→ㄱ|/ㄱl, 력→럭, 확률→왁률/왁릉, 치→지, O→0, [→1
 const STAT_PATTERNS = [
+  // --- Base info ---
   { pattern: /방[어머버]력[:\s]*(\d+)/,                    key: 'defense',       label: 'Defense' },
   { pattern: /내구도[:\s]*(\d+)\s*\/\s*(\d+)/,            key: 'durability',    label: 'Durability' },
   { pattern: /필[요표]?\s*힘[:\s]*(\d+)/,                 key: 'reqStr',        label: 'Required Strength' },
+  { pattern: /필[요표]?\s*민[첩침][:\s]*(\d+)/,           key: 'reqDex',        label: 'Required Dexterity' },
   { pattern: /[요보]구\s*레벨[:\s]*(\d+)/,                key: 'reqLevel',      label: 'Required Level' },
-  // FRW: 달리기/걷기 — OCR often renders 기 as ㄱ|, ㄱl, or similar
-  { pattern: /[달담]리\s*[기ㄱ][|l]?\/[걷건곧끝][기ㄱ][|l]?\s*속도\s*[+*](\d+)%/, key: 'frw', label: 'Faster Run/Walk' },
-  // ED: 방어력 +XXX% 증가 — OCR may prefix digits with [ or misread ? for digits
-  { pattern: /방[어머버]력\s*[+*]\s*[[\]]?(\d[\d?]*\d)%\s*(?:증가|중가)/, key: 'ed', label: 'Enhanced Defense' },
-  { pattern: /공격력\s*[+*]\s*[[\]]?(\d[\d?]*\d)%\s*(?:증가|중가)/,      key: 'ed', label: 'Enhanced Damage' },
-  // MF: 확률 often OCR'd as 왁률, 학률, 왁릉, or totally garbled
+
+  // --- ED: "피해 +N% 증가" / "방어력 +N% 증가" ---
+  { pattern: /방[어머버]력\s*[+*]\s*[[\]]?(\d[\d?]*\d?)%\s*(?:증가|중가)/, key: 'ed', label: 'Enhanced Defense' },
+  { pattern: /피해\s*[+*]\s*[[\]]?(\d[\d?]*\d?)%\s*(?:증가|중가)/,        key: 'ed', label: 'Enhanced Damage' },
+
+  // --- MF: "마법 아이템 발견 확률 N% 증가" ---
   { pattern: /마법\s*아이템\s*발견\s*[^\d]*?(\d+)%\s*(?:증가|중가)?/, key: 'mf', label: 'Magic Find' },
-  // Strength: 힘 +10 — OCR may render 10 as IO, lO, O
+
+  // --- Speed ---
+  // FRW: "달리기/걷기 속도 +N%" — OCR often renders 기 as ㄱ|, ㄱl
+  { pattern: /[달담]리\s*[기ㄱ][|l]?\/[걷건곧끝][기ㄱ][|l]?\s*속도\s*[+*](\d+)%/, key: 'frw', label: 'Faster Run/Walk' },
+  // IAS: "공격 속도 +N%"
+  { pattern: /공격\s*속도\s*[+*](\d+)%/,                   key: 'ias',           label: 'Increased Attack Speed' },
+  // FCR: "시전 속도 +N%"
+  { pattern: /시전\s*속도\s*[+*](\d+)%/,                   key: 'fcr',           label: 'Faster Cast Rate' },
+  // FHR: "타격 회복 속도 +N%"
+  { pattern: /타격\s*회복\s*속도\s*[+*](\d+)%/,            key: 'fhr',           label: 'Faster Hit Recovery' },
+  { pattern: /적중\s*(?:회복|외복)\s*(?:속도\s*)?[+*](\d+)%/, key: 'fhr',        label: 'Faster Hit Recovery' },
+  // FBR: "막기 속도 +N%"
+  { pattern: /막기\s*속도\s*[+*](\d+)%/,                   key: 'fbr',           label: 'Faster Block Rate' },
+
+  // --- Primary stats ---
   { pattern: /힘\s*[+*]\s*(\d+)/,                         key: 'str',           label: 'Strength' },
   { pattern: /활력\s*[+*]\s*(\d+)/,                        key: 'vit',           label: 'Vitality' },
   { pattern: /민첩\s*[+*]\s*(\d+)/,                        key: 'dex',           label: 'Dexterity' },
+  // Energy: 게임 내 "마력", OCR에서 "에너지"로 나올 수도 있음
+  { pattern: /마력\s*[+*]\s*(\d+)/,                        key: 'energy',        label: 'Energy' },
   { pattern: /에너지\s*[+*]\s*(\d+)/,                      key: 'energy',        label: 'Energy' },
-  // All Skills: 모든 기술/스킬 — OCR may garble 기술 as T=, 12, Td, NE
+
+  // --- Skills ---
+  // All Skills: "모든 기술 +N" — OCR may garble 기술 as T=, 12, Td, NE
   { pattern: /(?:모[든는]\s*(?:스킬|기술|NE|T[=d]|[기ㄱ][술슬]|le|[|l]e)|ETE|모[든는]\s*le)\s*[+*](\d+)/, key: 'allSkills', label: 'All Skills' },
-  // All Attributes: 모든 능력치 — OCR may render 치 as 지
+  // All Attributes: "모든 능력치 +N"
   { pattern: /모든\s*능력[치지]\s*[+*](\d+)/,              key: 'allAttr',       label: 'All Attributes' },
+  // All Resistances: "모든 저항 +N"
   { pattern: /모든\s*저항\s*[+*](\d+)/,                    key: 'allRes',        label: 'All Resistances' },
-  { pattern: /타격\s*시\s*(\d+)%\s*확률.*치명타/,           key: 'cb',            label: 'Crushing Blow' },
-  { pattern: /시전\s*속도\s*[+*](\d+)%/,                   key: 'fcr',           label: 'Faster Cast Rate' },
-  { pattern: /공격\s*(?:속도|AE)\s*[+*](\d+)%/,            key: 'ias',           label: 'Increased Attack Speed' },
-  { pattern: /적중\s*(?:회복|외복)\s*(?:속도\s*)?[+*](\d+)%/, key: 'fhr',        label: 'Faster Hit Recovery' },
-  { pattern: /생명력\s*[+*](\d+)/,                         key: 'life',          label: 'Life' },
-  { pattern: /마나\s*[+*](\d+)/,                           key: 'mana',          label: 'Mana' },
-  { pattern: /생명력\s*(\d+)%\s*(?:도둑질|EH)/,            key: 'lifeLeech',     label: 'Life Stolen Per Hit' },
+
+  // --- Life / Mana (avoid matching "적 처치 시 생명력/마나", "생명력 회복", "생명력 N% 훔침") ---
+  { pattern: /(?<!처치\s*시\s*)(?<!회복\s*)생명력\s*[+*](\d+)(?!%)/,  key: 'life',   label: 'Life' },
+  { pattern: /(?<!처치\s*시\s*)(?<!재생\s*)마나\s*[+*](\d+)(?!%)/,    key: 'mana',   label: 'Mana' },
+
+  // --- Leech: "적중당 생명력 N% 훔침" ---
   { pattern: /적중당\s*생명력\s*(\d+)%/,                   key: 'lifeLeech',     label: 'Life Stolen Per Hit' },
-  { pattern: /마나\s*도둑질\s*(\d+)%/,                     key: 'manaLeech',     label: 'Mana Stolen Per Hit' },
-  // Attacker Takes Damage: OCR may garble 피해를 as OSE, etc.
-  { pattern: /공격자[가ㄱ]?\s*피해[를]?\s*(\d+)/,          key: 'thorns',        label: 'Attacker Takes Damage' },
-  { pattern: /피해\s*(\d+)\s*-\s*(\d+)\s*추[가ㄱ][7ㄱ]?/,  key: 'addsDmg',       label: 'Adds Damage' },
+  { pattern: /생명력\s*(\d+)%\s*(?:훔[침칩]|도둑질|EH)/,   key: 'lifeLeech',     label: 'Life Stolen Per Hit' },
+  { pattern: /적중당\s*마나\s*(\d+)%/,                     key: 'manaLeech',     label: 'Mana Stolen Per Hit' },
+  { pattern: /마나\s*(\d+)%\s*(?:훔[침칩]|도둑질|EH)/,     key: 'manaLeech',     label: 'Mana Stolen Per Hit' },
+
+  // --- Crushing Blow: "강타 확률 N%" ---
+  { pattern: /강타\s*확률\s*(\d+)%/,                       key: 'cb',            label: 'Crushing Blow' },
+  { pattern: /(\d+)%\s*(?:확률.*?)?(?:강타|분쇄\s*타)/,    key: 'cb',            label: 'Crushing Blow' },
+
+  // --- Deadly Strike: "치명적 공격 N%" ---
+  { pattern: /치명적\s*공격\s*(\d+)%/,                     key: 'deadlyStrike',  label: 'Deadly Strike' },
+  { pattern: /(\d+)%\s*(?:확률.*?)?치명적\s*공격/,         key: 'deadlyStrike',  label: 'Deadly Strike' },
+
+  // --- Open Wounds: "상처 악화 확률 N%" ---
+  { pattern: /상처\s*악화\s*(?:확률\s*)?(\d+)%/,           key: 'openWounds',    label: 'Open Wounds' },
+  { pattern: /(\d+)%\s*(?:확률.*?)?상처\s*악화/,           key: 'openWounds',    label: 'Open Wounds' },
+
+  // --- Attacker Takes Damage: "공격자가 피해를 N 받음" ---
+  { pattern: /공격자[가ㄱ]?\s*(?:받는\s*)?피해[를]?\s*(\d+)\s*받/,  key: 'thorns',  label: 'Attacker Takes Damage' },
+  { pattern: /공격자[가ㄱ]?\s*(?:받는\s*)?피해[를]?\s*(\d+)/,       key: 'thorns',  label: 'Attacker Takes Damage' },
+
+  // --- Adds damage: elemental and generic ---
+  { pattern: /화염\s*피해\s*(\d+)\s*-\s*(\d+)\s*추[가ㄱ]/, key: 'addsFireDmg',  label: 'Adds Fire Damage' },
+  { pattern: /냉기\s*피해\s*(\d+)\s*-\s*(\d+)\s*추[가ㄱ]/, key: 'addsColdDmg',  label: 'Adds Cold Damage' },
+  { pattern: /번개\s*피해\s*(\d+)\s*-\s*(\d+)\s*추[가ㄱ]/, key: 'addsLightDmg', label: 'Adds Lightning Damage' },
+  { pattern: /마법\s*피해\s*(\d+)\s*-\s*(\d+)\s*추[가ㄱ]/, key: 'addsMagicDmg', label: 'Adds Magic Damage' },
+  { pattern: /독\s*피해\s*(\d+)\s*-\s*(\d+)\s*추[가ㄱ]/,   key: 'addsPoisonDmg', label: 'Adds Poison Damage' },
+  { pattern: /피해\s*(\d+)\s*-\s*(\d+)\s*추[가ㄱ][7ㄱ]?/,  key: 'addsDmg',      label: 'Adds Damage' },
+
+  // --- Damage to Demons/Undead: "악마에게 주는 피해 +N%" ---
+  { pattern: /악마에게\s*(?:주는\s*)?피해\s*[+*](\d+)%/,    key: 'dmgDemons',    label: 'Damage to Demons' },
+  { pattern: /언데드에게\s*(?:주는\s*)?피해\s*[+*](\d+)%/,  key: 'dmgUndead',    label: 'Damage to Undead' },
+
+  // --- Attack Rating: "명중률 +N" ---
+  { pattern: /명중률\s*[+*](\d+)/,                         key: 'ar',            label: 'Attack Rating' },
+  { pattern: /명중률\s*보너스\s*(\d+)%/,                   key: 'arBonus',       label: 'Bonus to Attack Rating' },
+  { pattern: /명중률\s*(\d+)%\s*(?:증가|중가)/,            key: 'arBonus',       label: 'Bonus to Attack Rating' },
+  { pattern: /악마에\s*대한\s*명중률\s*[+*](\d+)/,          key: 'arDemons',     label: 'Attack Rating Against Demons' },
+  { pattern: /언데드에\s*대한\s*명중률\s*[+*](\d+)/,        key: 'arUndead',     label: 'Attack Rating Against Undead' },
+
+  // --- Min/Max damage ---
+  { pattern: /최소\s*피해\s*[+*](\d+)/,                    key: 'minDmg',        label: 'Minimum Damage' },
+  { pattern: /최대\s*피해\s*[+*](\d+)/,                    key: 'maxDmg',        label: 'Maximum Damage' },
+  { pattern: /^피해\s*[+*](\d+)$/m,                        key: 'flatDmg',       label: 'Damage' },
+
+  // --- Sockets ---
   { pattern: /소켓\s*\((\d+)\)/,                           key: 'sockets',       label: 'Sockets' },
   { pattern: /홈\s*있음\s*\((\d+)\)/,                      key: 'sockets',       label: 'Sockets' },
+
+  // --- Life/Mana recovery ---
+  { pattern: /생명력\s*회복\s*[+*](\d+)/,                  key: 'replenishLife', label: 'Replenish Life' },
+  { pattern: /마나\s*재생\s*(\d+)%/,                       key: 'regenMana',     label: 'Regenerate Mana' },
+
+  // --- Requirements: "착용 조건 -N%" ---
+  { pattern: /착용\s*조건\s*[+-](\d+)%/,                   key: 'reqReduced',    label: 'Requirements' },
+
+  // --- Target Defense: "대상의 방어력 -N%" ---
+  { pattern: /대상의?\s*방어력\s*-(\d+)%/,                 key: 'targetDef',     label: 'Target Defense' },
+
+  // --- Slows Target: "대상 감속 N%" ---
+  { pattern: /대상\s*(?:감속|둔화)\s*(\d+)%/,              key: 'slowTarget',    label: 'Slows Target' },
+
+  // --- Blocking: "막기 확률 N% 증가" ---
+  { pattern: /막기\s*확률\s*(\d+)%\s*(?:증가|중가)/,       key: 'blockChance',   label: 'Increased Chance of Blocking' },
+
+  // --- Stamina ---
+  { pattern: /지구력\s*고갈\s*속도\s*(\d+)%\s*감소/,       key: 'slowerStamina', label: 'Slower Stamina Drain' },
   { pattern: /지구력.*?(\d+)%\s*감소/,                     key: 'slowerStamina', label: 'Slower Stamina Drain' },
+  { pattern: /최대\s*지구력\s*[+*](\d+)/,                  key: 'maxStamina',    label: 'Maximum Stamina' },
+
+  // --- Resistances ---
   { pattern: /화염\s*저항\s*[+*](\d+)%/,                   key: 'fireRes',       label: 'Fire Resist' },
   { pattern: /냉기\s*저항\s*[+*](\d+)%/,                   key: 'coldRes',       label: 'Cold Resist' },
   { pattern: /번개\s*저항\s*[+*](\d+)%/,                   key: 'lightRes',      label: 'Lightning Resist' },
   { pattern: /독\s*저항\s*[+*](\d+)%/,                     key: 'poisonRes',     label: 'Poison Resist' },
-  { pattern: /[받반]는\s*물리\s*피해\s*(\d+)%\s*감소/,      key: 'pdr',           label: 'Physical Damage Reduced' },
+
+  // --- Damage Reduced: "피해 N 감소" / "마법 피해 N 감소" ---
   { pattern: /마법\s*피해\s*(\d+)\s*감소/,                  key: 'mdr',           label: 'Magic Damage Reduced' },
-  // Enemy resistance reduction (Griffon's, etc.)
+  { pattern: /피해\s*(\d+)\s*감소/,                        key: 'dr',            label: 'Damage Reduced' },
+
+  // --- Enemy resistance reduction: "적의 화염 저항 -N%" ---
   { pattern: /적의\s*번개\s*저[항깜]\s*-(\d+)%/,            key: 'enemyLightRes', label: 'Enemy Lightning Resist' },
   { pattern: /적의\s*화염\s*저항\s*-(\d+)%/,               key: 'enemyFireRes',  label: 'Enemy Fire Resist' },
   { pattern: /적의\s*냉기\s*저항\s*-(\d+)%/,               key: 'enemyColdRes',  label: 'Enemy Cold Resist' },
-  // Skill damage bonus (Griffon's, Facets)
-  { pattern: /번개\s*(?:\S*기술\s*)?피해\s*[+*](\d+)%/,     key: 'lightSkillDmg', label: 'Lightning Skill Damage' },
-  { pattern: /화염\s*(?:\S*기술\s*)?피해\s*[+*](\d+)%/,     key: 'fireSkillDmg',  label: 'Fire Skill Damage' },
-  { pattern: /냉기\s*(?:\S*기술\s*)?피해\s*[+*](\d+)%/,     key: 'coldSkillDmg',  label: 'Cold Skill Damage' },
-  // Experience gain (Annihilus)
+  { pattern: /적의\s*독\s*저항\s*-(\d+)%/,                 key: 'enemyPoisonRes', label: 'Enemy Poison Resist' },
+
+  // --- Skill damage bonus: "화염 기술 피해 +N%" ---
+  { pattern: /번개\s*(?:기술\s*)?피해\s*[+*](\d+)%/,       key: 'lightSkillDmg', label: 'Lightning Skill Damage' },
+  { pattern: /화염\s*(?:기술\s*)?피해\s*[+*](\d+)%/,       key: 'fireSkillDmg',  label: 'Fire Skill Damage' },
+  { pattern: /냉기\s*(?:기술\s*)?피해\s*[+*](\d+)%/,       key: 'coldSkillDmg',  label: 'Cold Skill Damage' },
+  { pattern: /독\s*(?:기술\s*)?피해\s*[+*](\d+)%/,         key: 'poisonSkillDmg', label: 'Poison Skill Damage' },
+
+  // --- Absorb: "화염 흡수 +N" / "화염 흡수 N%" ---
+  { pattern: /냉기\s*흡수\s*[+*](\d+)/,                    key: 'coldAbsorb',    label: 'Cold Absorb' },
+  { pattern: /화염\s*흡수\s*[+*](\d+)/,                    key: 'fireAbsorb',    label: 'Fire Absorb' },
+  { pattern: /번개\s*흡수\s*[+*](\d+)/,                    key: 'lightAbsorb',   label: 'Lightning Absorb' },
+  { pattern: /마법\s*흡수\s*[+*](\d+)/,                    key: 'magicAbsorb',   label: 'Magic Absorb' },
+  { pattern: /냉기\s*흡수\s*(\d+)%/,                       key: 'coldAbsorbPct', label: 'Cold Absorb %' },
+  { pattern: /화염\s*흡수\s*(\d+)%/,                       key: 'fireAbsorbPct', label: 'Fire Absorb %' },
+  { pattern: /번개\s*흡수\s*(\d+)%/,                       key: 'lightAbsorbPct', label: 'Lightning Absorb %' },
+
+  // --- Kill bonuses: "적 처치 시 마나 +N" ---
+  { pattern: /적\s*처치\s*시\s*마나\s*[+*](\d+)/,          key: 'manaPerKill',   label: 'Mana after each Kill' },
+  { pattern: /적\s*처치\s*시\s*생명력\s*[+*](\d+)/,        key: 'lifePerKill',   label: 'Life after each Kill' },
+  { pattern: /악마\s*처치\s*시\s*생명력\s*[+*](\d+)/,      key: 'lifePerDemonKill', label: 'Life after each Demon Kill' },
+
+  // --- Extra Gold: "괴물에게서 얻는 금화 N% 증가" ---
+  { pattern: /금화\s*(\d+)%\s*(?:증가|중가)/,              key: 'extraGold',     label: 'Extra Gold from Monsters' },
+  { pattern: /골드.*?(\d+)%/,                              key: 'extraGold',     label: 'Extra Gold from Monsters' },
+
+  // --- Damage to Mana: "받는 피해의 N%만큼 마나 회복" ---
+  { pattern: /받는\s*피해의\s*(\d+)%.*?마나\s*회복/,       key: 'dmgToMana',     label: 'Damage Taken Goes To Mana' },
+
+  // --- Poison damage ---
+  { pattern: /독\s*피해\s*[+*](\d+)/,                      key: 'poisonDmg',     label: 'Poison Damage' },
+
+  // --- Piercing / Knockback ---
+  { pattern: /관통\s*공격/,                                key: '_pierce',       label: 'Piercing Attack' },
+  { pattern: /밀쳐내기/,                                   key: '_knockback',    label: 'Knockback' },
+
+  // --- Monster flee: "적중 시 괴물 도주 N%" ---
+  { pattern: /괴물\s*도주\s*(\d+)%/,                       key: 'flee',          label: 'Hit Causes Monsters to Flee' },
+  { pattern: /적중\s*시.*?(\d+)%.*?도주/,                  key: 'flee',          label: 'Hit Causes Monsters to Flee' },
+
+  // --- Light Radius: "시야 +N" ---
+  { pattern: /시야\s*[+*](\d+)/,                           key: 'lightRadius',   label: 'Light Radius' },
+
+  // --- Defense vs Missile/Melee: "원거리 공격 방어력 +N" ---
+  { pattern: /원거리\s*공격\s*방어력\s*[+*](\d+)/,         key: 'defVsMissile',  label: 'Defense Vs. Missile' },
+  { pattern: /근접\s*공격\s*방어력\s*[+*](\d+)/,           key: 'defVsMelee',    label: 'Defense Vs. Melee' },
+
+  // --- Max resist: "최대 화염 저항 +N%" ---
+  { pattern: /최대\s*화염\s*저항\s*[+*](\d+)%/,            key: 'maxFireRes',    label: 'Max Fire Resist' },
+  { pattern: /최대\s*냉기\s*저항\s*[+*](\d+)%/,            key: 'maxColdRes',    label: 'Max Cold Resist' },
+  { pattern: /최대\s*번개\s*저항\s*[+*](\d+)%/,            key: 'maxLightRes',   label: 'Max Lightning Resist' },
+  { pattern: /최대\s*독\s*저항\s*[+*](\d+)%/,              key: 'maxPoisonRes',  label: 'Max Poison Resist' },
+
+  // --- Max Life/Mana %: "최대 생명력 N% 증가" ---
+  { pattern: /최대\s*생명력\s*(\d+)%\s*(?:증가|중가)/,      key: 'maxLifePct',   label: 'Increase Maximum Life' },
+  { pattern: /최대\s*마나\s*(\d+)%\s*(?:증가|중가)/,        key: 'maxManaPct',   label: 'Increase Maximum Mana' },
+
+  // --- Experience: "경험치 획득량 +N%" ---
   { pattern: /경험[치지]?\s*획득[량랑]\s*[+*](\d+)%/,      key: 'expGain',       label: 'Experience Gained' },
+
+  // --- Poison length: "독 지속시간 N% 감소" ---
+  { pattern: /독\s*지속\s*시간\s*(\d+)%\s*감소/,            key: 'poisonLenReduced', label: 'Poison Length Reduced' },
+
+  // --- Boolean flags ---
+  { pattern: /파괴\s*불가/,                                key: '_indestructible', label: 'Indestructible' },
+  { pattern: /빙결되지\s*않음/,                            key: '_cannotFreeze',  label: 'Cannot Be Frozen' },
+  { pattern: /대상\s*빙결/,                                key: '_freezeTarget',  label: 'Freezes Target' },
+  { pattern: /괴물\s*회복\s*저지/,                         key: '_preventHeal',   label: 'Prevent Monster Heal' },
 ];
 
 /**
@@ -387,9 +536,13 @@ export function parseItemText(text) {
   // Helper: parse number that might contain ? for OCR-garbled digits
   const parseNum = (s) => parseInt(s.replace(/\?/g, ''));
   for (const sp of STAT_PATTERNS) {
+    if (stats[sp.key]) continue; // First match wins (more specific patterns listed first)
     const match = fullText.match(sp.pattern);
     if (match) {
-      if (sp.key === 'addsDmg') {
+      if (sp.key.startsWith('_')) {
+        // Boolean flags (no value)
+        stats[sp.key] = { value: true, label: sp.label };
+      } else if (sp.key === 'addsDmg' || sp.key === 'addsFireDmg' || sp.key === 'addsColdDmg' || sp.key === 'addsLightDmg' || sp.key === 'addsMagicDmg' || sp.key === 'addsPoisonDmg') {
         stats[sp.key] = { min: parseNum(match[1]), max: parseNum(match[2]), label: sp.label };
       } else if (sp.key === 'durability') {
         stats[sp.key] = { current: parseNum(match[1]), max: parseNum(match[2]), label: sp.label };
