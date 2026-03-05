@@ -313,6 +313,10 @@ textarea:focus {
   border-left-color: #f87171;
 }
 
+.perfect-analysis.grade-ref {
+  border-left-color: #888;
+}
+
 .grade-badge {
   font-size: 28px;
   font-weight: 800;
@@ -324,6 +328,7 @@ textarea:focus {
 .grade-high .grade-badge { color: #c4a24f; }
 .grade-mid .grade-badge { color: #6ba3f7; }
 .grade-low .grade-badge { color: #f87171; }
+.grade-ref .grade-badge { color: #888; }
 
 .grade-detail {
   display: flex;

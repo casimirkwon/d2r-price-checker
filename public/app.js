@@ -276,13 +276,14 @@ function renderPriceInfo(data, itemName) {
 
   // --- Perfect analysis & Stat quality bars ---
   const pa = data.perfectAnalysis;
-  if (data.statComparison && data.statComparison.length > 0) {
+  const hasBars = data.statComparison && data.statComparison.length > 0;
+  if (hasBars || pa) {
     statComparison.classList.remove('hidden');
     let barsHtml = '';
 
     // Perfect analysis summary with 으뜸 스펙 popup
     if (pa) {
-      const gradeClass = pa.isPerfect ? 'grade-perfect' : pa.avgQuality >= 90 ? 'grade-high' : pa.avgQuality >= 70 ? 'grade-mid' : 'grade-low';
+      const gradeClass = pa.avgQuality == null ? 'grade-ref' : pa.isPerfect ? 'grade-perfect' : pa.avgQuality >= 90 ? 'grade-high' : pa.avgQuality >= 70 ? 'grade-mid' : 'grade-low';
 
       // Build 으뜸 스펙 popup content
       let specHtml = '';
@@ -313,7 +314,7 @@ function renderPriceInfo(data, itemName) {
           <div class="grade-badge">${pa.grade}</div>
           <div class="grade-detail">
             <div class="grade-item-name">${escapeHtml(pa.itemName)}</div>
-            <span>평균 품질 <strong>${pa.avgQuality}%</strong> · 으뜸 ${pa.perfectCount}/${pa.totalStats}개</span>
+            <span>${pa.avgQuality != null ? `평균 품질 <strong>${pa.avgQuality}%</strong> · 으뜸 ${pa.perfectCount}/${pa.totalStats}개` : pa.totalStats > 0 ? `가변 스탯 ${pa.totalStats}개 (hover로 으뜸 스펙 확인)` : `고정 스탯 아이템 (hover로 스펙 확인)`}</span>
           </div>
           <div class="grade-hint">hover</div>
         </div>`;

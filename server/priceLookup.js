@@ -97,6 +97,13 @@ export async function lookupPrice(itemNameEn, baseTypeEn, stats, options = {}) {
       statComparison = compareStats(stats, d2trader.itemAttrs);
     }
   }
+  // Even if no stat comparison matched, show perfect spec reference if item is in DB
+  if (!perfectAnalysis && itemNameEn) {
+    const dbItem = findInItemDb(itemNameEn);
+    if (dbItem) {
+      perfectAnalysis = buildPerfectSpecOnly(dbItem, itemNameEn, stats || {});
+    }
+  }
 
   // Market comparison: compare user's item against CC listings
   let marketComparison = null;
@@ -852,6 +859,51 @@ function compareWithLocalDb(itemNameEn, userStats) {
       grade: isPerfect ? '으뜸' : avgQuality >= 90 ? '상' : avgQuality >= 70 ? '중상' : avgQuality >= 50 ? '중' : avgQuality >= 30 ? '중하' : '하',
       perfectSpec,
     },
+  };
+}
+
+/**
+ * Build perfectAnalysis with spec only (no stat comparison matched).
+ * Shows the item's perfect spec as reference even when user stats don't match.
+ */
+function buildPerfectSpecOnly(item, itemNameEn, userStats) {
+  const hasVariableDefense = item.variableStats.some(s => placeholderToStatKey(s.name) === 'defense');
+  const perfectSpec = [];
+
+  if (!hasVariableDefense) {
+    const baseDef = item.baseStats.find(s => s.name.startsWith('Defense'));
+    if (baseDef && baseDef.min !== baseDef.max) {
+      perfectSpec.push({
+        label: '방어력',
+        max: baseDef.max,
+        min: baseDef.min,
+        varies: true,
+        userValue: userStats.defense ? userStats.defense.value : null,
+      });
+    }
+  }
+
+  for (const s of item.allStats) {
+    const statKey = placeholderToStatKey(s.name);
+    const label = (statKey && STAT_LABELS[statKey]) || formatPlaceholder(s.name);
+    perfectSpec.push({
+      label,
+      max: s.max,
+      varies: s.varies,
+      userValue: statKey && userStats[statKey] ? userStats[statKey].value : null,
+    });
+  }
+
+  return {
+    itemName: itemNameEn,
+    quality: item.quality,
+    baseName: item.baseName || null,
+    isPerfect: false,
+    avgQuality: null,
+    perfectCount: 0,
+    totalStats: item.variableStats.length,
+    grade: '참고',
+    perfectSpec,
   };
 }
 
