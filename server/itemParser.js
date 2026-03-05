@@ -431,7 +431,7 @@ const STAT_PATTERNS = [
   { pattern: /처치한\s*괴물.*?안식/,                       key: '_restInPeace',  label: 'Slain Monsters Rest in Peace' },
 
   // --- Boolean flags ---
-  { pattern: /파괴\s*불가/,                                key: '_indestructible', label: 'Indestructible' },
+  { pattern: /파괴\s*[불물]가/,                              key: '_indestructible', label: 'Indestructible' },
   { pattern: /빙결되지\s*않음/,                            key: '_cannotFreeze',  label: 'Cannot Be Frozen' },
   { pattern: /대상\s*빙결/,                                key: '_freezeTarget',  label: 'Freezes Target' },
   { pattern: /괴물\s*회복\s*저지/,                         key: '_preventHeal',   label: 'Prevent Monster Heal' },
