@@ -1,0 +1,351 @@
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: 'Segoe UI', -apple-system, sans-serif;
+  background: #1a1a2e;
+  color: #e0e0e0;
+  min-height: 100vh;
+}
+
+.container {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 24px 16px;
+}
+
+header {
+  text-align: center;
+  margin-bottom: 24px;
+}
+
+header h1 {
+  color: #c4a24f;
+  font-size: 24px;
+  margin-bottom: 4px;
+}
+
+.subtitle {
+  color: #888;
+  font-size: 14px;
+}
+
+.options-bar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+  padding: 8px 12px;
+  background: #16213e;
+  border-radius: 8px;
+}
+
+.toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+}
+
+.toggle input[type="checkbox"] {
+  width: 18px;
+  height: 18px;
+  accent-color: #c4a24f;
+}
+
+.toggle-label {
+  font-size: 14px;
+}
+
+.mode-display {
+  font-size: 14px;
+  color: #c4a24f;
+  font-weight: 600;
+}
+
+/* Drop Zone */
+.drop-zone {
+  border: 2px dashed #333;
+  border-radius: 12px;
+  padding: 40px 20px;
+  text-align: center;
+  cursor: pointer;
+  transition: border-color 0.2s, background 0.2s;
+  position: relative;
+  min-height: 200px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.drop-zone:hover,
+.drop-zone.dragover {
+  border-color: #c4a24f;
+  background: rgba(196, 162, 79, 0.05);
+}
+
+.drop-zone-content {
+  pointer-events: none;
+}
+
+.drop-icon {
+  font-size: 48px;
+  margin-bottom: 12px;
+}
+
+.drop-zone p {
+  color: #888;
+  font-size: 14px;
+}
+
+.drop-zone .sub {
+  font-size: 12px;
+  margin-top: 4px;
+}
+
+.preview-image {
+  max-width: 100%;
+  max-height: 400px;
+  border-radius: 8px;
+}
+
+.hidden { display: none !important; }
+
+/* Buttons */
+.btn {
+  display: block;
+  width: 100%;
+  padding: 12px;
+  border: none;
+  border-radius: 8px;
+  font-size: 16px;
+  cursor: pointer;
+  margin-top: 12px;
+  transition: opacity 0.2s;
+}
+
+.btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.btn-primary {
+  background: #c4a24f;
+  color: #1a1a2e;
+  font-weight: 600;
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: #d4b25f;
+}
+
+/* OCR Section */
+.ocr-section, .result-section {
+  margin-top: 24px;
+}
+
+.ocr-section h2, .result-section h2, .result-section h3 {
+  color: #c4a24f;
+  margin-bottom: 12px;
+  font-size: 18px;
+}
+
+.result-section h3 {
+  font-size: 15px;
+  margin-top: 20px;
+}
+
+textarea {
+  width: 100%;
+  background: #16213e;
+  border: 1px solid #333;
+  color: #e0e0e0;
+  border-radius: 8px;
+  padding: 12px;
+  font-size: 14px;
+  font-family: monospace;
+  resize: vertical;
+}
+
+textarea:focus {
+  outline: none;
+  border-color: #c4a24f;
+}
+
+/* Item Info */
+.item-info {
+  background: #16213e;
+  border-radius: 8px;
+  padding: 16px;
+  border-left: 4px solid #c4a24f;
+}
+
+.item-info .item-name {
+  font-size: 18px;
+  color: #c4a24f;
+  font-weight: 600;
+}
+
+.item-info .item-name-en {
+  font-size: 14px;
+  color: #888;
+}
+
+.item-info .base-type {
+  font-size: 14px;
+  color: #aaa;
+  margin-top: 4px;
+}
+
+.item-info .stat-list {
+  margin-top: 12px;
+  font-size: 13px;
+  line-height: 1.8;
+}
+
+.item-info .stat-list .stat-value {
+  color: #6ba3f7;
+}
+
+/* Price Info */
+.price-info {
+  margin-top: 16px;
+}
+
+.loading {
+  text-align: center;
+  color: #888;
+  padding: 20px;
+}
+
+.loading::after {
+  content: '';
+  animation: dots 1.5s steps(3) infinite;
+}
+
+@keyframes dots {
+  0% { content: ''; }
+  33% { content: '.'; }
+  66% { content: '..'; }
+  100% { content: '...'; }
+}
+
+.price-summary {
+  background: #16213e;
+  border-radius: 8px;
+  padding: 16px;
+  border-left: 4px solid #4ade80;
+}
+
+.price-summary .price-range {
+  font-size: 20px;
+  color: #4ade80;
+  font-weight: 700;
+}
+
+.price-summary .price-detail {
+  font-size: 13px;
+  color: #888;
+  margin-top: 8px;
+}
+
+.price-summary + .price-summary {
+  margin-top: 10px;
+}
+
+.price-summary.cc-price {
+  border-left-color: #a78bfa;
+}
+
+.price-summary.cc-price .price-range {
+  color: #a78bfa;
+}
+
+.price-summary.no-data {
+  border-left-color: #888;
+}
+
+.price-summary.no-data .price-range {
+  color: #888;
+  font-size: 16px;
+}
+
+/* Stat Comparison Bars */
+.stat-bar-item {
+  margin-bottom: 10px;
+}
+
+.stat-bar-label {
+  display: flex;
+  justify-content: space-between;
+  font-size: 13px;
+  margin-bottom: 3px;
+}
+
+.stat-bar-label .range {
+  color: #666;
+}
+
+.stat-bar {
+  height: 8px;
+  background: #333;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.stat-bar-fill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.5s ease;
+}
+
+.stat-bar-fill.perfect { background: #4ade80; }
+.stat-bar-fill.high { background: #c4a24f; }
+.stat-bar-fill.mid { background: #6ba3f7; }
+.stat-bar-fill.low { background: #f87171; }
+
+/* Trade History */
+.trade-item {
+  padding: 8px 12px;
+  border-bottom: 1px solid #222;
+  font-size: 13px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.trade-item:last-child { border-bottom: none; }
+
+.trade-price { color: #4ade80; font-weight: 600; }
+.trade-date { color: #666; font-size: 12px; }
+
+/* External Links */
+.link-item {
+  display: inline-block;
+  margin: 4px 8px 4px 0;
+  padding: 8px 16px;
+  background: #16213e;
+  border: 1px solid #333;
+  border-radius: 6px;
+  color: #6ba3f7;
+  text-decoration: none;
+  font-size: 13px;
+  transition: border-color 0.2s;
+}
+
+.link-item:hover {
+  border-color: #6ba3f7;
+}
+
+/* Error */
+.error-msg {
+  background: #2d1515;
+  border-left: 4px solid #f87171;
+  padding: 12px;
+  border-radius: 8px;
+  color: #f87171;
+  font-size: 14px;
+}

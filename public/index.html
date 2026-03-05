@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>D2R 아이템 시세 조회</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>D2R 아이템 시세 조회</h1>
+      <p class="subtitle">게임 스크린샷을 붙여넣기하면 아이템 가치를 조회합니다</p>
+    </header>
+
+    <div class="options-bar">
+      <label class="toggle">
+        <input type="checkbox" id="ladderToggle">
+        <span class="toggle-label">래더</span>
+      </label>
+      <span class="mode-display" id="modeDisplay">스탠다드</span>
+    </div>
+
+    <section class="input-section">
+      <div class="drop-zone" id="dropZone">
+        <div class="drop-zone-content">
+          <div class="drop-icon">📋</div>
+          <p>스크린샷을 여기에 <strong>Ctrl+V</strong> 또는 드래그&드롭</p>
+          <p class="sub">또는 클릭하여 파일 선택</p>
+        </div>
+        <img id="previewImage" class="preview-image hidden" alt="preview">
+        <input type="file" id="fileInput" accept="image/*" hidden>
+      </div>
+      <button class="btn btn-primary" id="ocrBtn" disabled>아이템 인식하기</button>
+    </section>
+
+    <section class="ocr-section hidden" id="ocrSection">
+      <h2>OCR 결과</h2>
+      <textarea id="ocrText" rows="10" placeholder="인식된 텍스트가 여기 표시됩니다. 수정 가능합니다."></textarea>
+      <button class="btn btn-primary" id="identifyBtn">아이템 분석 & 시세 조회</button>
+    </section>
+
+    <section class="result-section hidden" id="resultSection">
+      <h2>분석 결과</h2>
+
+      <div class="item-info" id="itemInfo"></div>
+
+      <div class="price-info" id="priceInfo">
+        <div class="loading" id="priceLoading">시세 조회 중...</div>
+      </div>
+
+      <div class="stat-comparison hidden" id="statComparison">
+        <h3>속성 품질 분석</h3>
+        <div id="statBars"></div>
+      </div>
+
+      <div class="trade-history hidden" id="tradeHistory">
+        <h3>최근 거래 내역 (diablo2.io)</h3>
+        <div id="tradeList"></div>
+      </div>
+
+      <div class="external-links hidden" id="externalLinks">
+        <h3>외부 사이트에서 확인</h3>
+        <div id="linkList"></div>
+      </div>
+    </section>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
