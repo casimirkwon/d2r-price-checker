@@ -27,22 +27,33 @@ let worker = null;
 
 async function getWorker() {
   if (!worker) {
+    console.log('[OCR] Initializing Tesseract worker (kor+eng)...');
     worker = await Tesseract.createWorker('kor+eng', 1, {
-      // logger: m => console.log(m),
+      logger: m => {
+        if (m.status === 'loading tesseract core' || m.status === 'loading language traineddata')
+          console.log(`[OCR] ${m.status}: ${Math.round((m.progress || 0) * 100)}%`);
+      },
     });
     // PSM 6 = assume a single uniform block of text
-    // Prioritize Korean character set recognition
     await worker.setParameters({
       tessedit_pageseg_mode: '6',
       preserve_interword_spaces: '1',
     });
+    console.log('[OCR] Tesseract worker ready.');
   }
   return worker;
 }
 
 export async function runOCR(imageBuffer) {
+  console.log(`[OCR] Processing image (${imageBuffer.length} bytes)...`);
   const processed = await preprocessImage(imageBuffer);
+  console.log(`[OCR] Preprocessed image (${processed.length} bytes), running recognition...`);
   const w = await getWorker();
-  const { data: { text } } = await w.recognize(processed);
-  return text.trim();
+  const { data: { text, confidence } } = await w.recognize(processed);
+  const trimmed = text.trim();
+  console.log(`[OCR] Result: ${trimmed.length} chars, confidence: ${confidence}`);
+  if (!trimmed) {
+    console.warn('[OCR] WARNING: Empty OCR result. Check if language data loaded correctly.');
+  }
+  return trimmed;
 }

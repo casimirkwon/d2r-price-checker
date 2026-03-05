@@ -84,6 +84,7 @@ ocrBtn.addEventListener('click', async () => {
     const data = await res.json();
 
     if (data.error) throw new Error(data.error);
+    if (!data.text) throw new Error('텍스트를 인식하지 못했습니다. 아이템 툴팁이 선명한 이미지를 사용해주세요.');
 
     ocrText.value = data.text;
     ocrSection.classList.remove('hidden');
