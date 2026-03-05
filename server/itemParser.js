@@ -218,21 +218,8 @@ const STAT_PATTERNS = [
  */
 export function parseItemText(text) {
   // Pre-clean OCR text: fix common OCR artifacts
+  // Note: |→기, *→+ substitutions are already done in ocr.js
   let cleaned = text
-    // Pipe/bar → Korean character fixes (kor-only OCR artifacts)
-    .replace(/[|l][|l]술/g, '기술')  // ||술 → 기술
-    .replace(/7[|l]술/g, '기술')  // 7|술 → 기술
-    .replace(/ㄱ[|l]/g, '기')    // ㄱ| or ㄱl → 기
-    .replace(/[|l]술/g, '기술')   // |술 or l술 → 기술
-    // Symbol → number/operator fixes
-    .replace(/\+[|l!](?=\s|$)/g, '+1') // +| or +! at end → +1
-    .replace(/\+O\b/g, '+10')    // +O → +10
-    .replace(/\*(\d)/g, '+$1')   // *N → +N
-    .replace(/\*\+/g, '+')       // *+ → +
-    .replace(/x(\d)/g, '+$1')    // xN → +N
-    .replace(/\[(\d)/g, '$1')    // [9 → 9
-    .replace(/(\d)\]/g, '$1')    // 9] → 9
-    // Korean OCR corrections
     .replace(/왁[률릉룰]/g, '확률')
     .replace(/학률/g, '확률')
     .replace(/능력지/g, '능력치')

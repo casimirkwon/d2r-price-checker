@@ -51,10 +51,27 @@ export async function runOCR(imageBuffer) {
   console.log(`[OCR] Preprocessed image (${processed.length} bytes), running recognition...`);
   const w = await getWorker();
   const { data: { text, confidence } } = await w.recognize(processed);
-  const trimmed = text.trim();
-  console.log(`[OCR] Result: ${trimmed.length} chars, confidence: ${confidence}`);
-  if (!trimmed) {
+
+  // Post-process in order:
+  // 1) Symbol-to-Korean substitutions (before stripping)
+  // 2) Strip remaining noise characters
+  const cleaned = text
+    .replace(/[|l][|l]술/g, '기술')   // ||술 → 기술
+    .replace(/7[|l]술/g, '기술')      // 7|술 → 기술
+    .replace(/1[|l]술/g, '기술')      // 1|술 → 기술
+    .replace(/ㄱ[|l]/g, '기')         // ㄱ| → 기
+    .replace(/\*(\d)/g, '+$1')        // *N → +N
+    .replace(/\*\+/g, '+')            // *+ → +
+    .replace(/!(\d)/g, '1$1')         // !N → 1N
+    .replace(/!(?=\s|$)/g, '1')       // ! at end → 1
+    .split('\n')
+    .map(line => line.replace(/[^\uAC00-\uD7A3\u3131-\u3163\u1100-\u11FF\d\s+\-/:()%.~,]/g, '').trim())
+    .join('\n')
+    .trim();
+
+  console.log(`[OCR] Result: ${cleaned.length} chars, confidence: ${confidence}`);
+  if (!cleaned) {
     console.warn('[OCR] WARNING: Empty OCR result. Check if language data loaded correctly.');
   }
-  return trimmed;
+  return cleaned;
 }
