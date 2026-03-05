@@ -13,6 +13,7 @@ async function preprocessImage(buffer) {
   // Extract text from tooltip: use the value (brightness) channel from HSV-like approach
   // D2R tooltip text is bright (white, gold, blue) on dark background
   return sharp(buffer)
+    .flatten({ background: '#000000' })  // remove alpha channel (clipboard PNG)
     .resize({ width: meta.width * scale, kernel: 'lanczos3' })
     .grayscale()
     .normalize()
