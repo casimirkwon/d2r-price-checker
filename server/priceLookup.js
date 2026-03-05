@@ -17,17 +17,17 @@ try {
  * @param {string} itemNameEn - English item name (e.g. "War Traveler")
  * @param {string} baseTypeEn - English base type (e.g. "Battle Boots")
  * @param {object} stats - Parsed stats from the item
- * @param {object} options - { ladder: boolean, itemNameKo: string }
+ * @param {object} options - { ladder, itemNameKo, ethereal, sockets }
  */
 export async function lookupPrice(itemNameEn, baseTypeEn, stats, options = {}) {
-  const { ladder = false, itemNameKo } = options;
+  const { ladder = false, itemNameKo, ethereal, sockets } = options;
 
   const lookups = [
     lookupD2io(itemNameEn, ladder),
     lookupD2Trader(itemNameEn),
   ];
   if (itemNameKo) {
-    lookups.push(lookupChaoscube(itemNameKo, ladder));
+    lookups.push(lookupChaoscube(itemNameKo, ladder, { ethereal, sockets }));
   }
 
   const results = await Promise.allSettled(lookups);
@@ -295,7 +295,8 @@ const CC_WEB = 'https://www.chaoscube.co.kr';
 const ccBindingCache = new Map();
 const CC_CACHE_TTL = 10 * 60 * 1000;
 
-async function lookupChaoscube(itemNameKo, ladder = false) {
+async function lookupChaoscube(itemNameKo, ladder = false, filters = {}) {
+  const { ethereal, sockets } = filters;
   const searchConfig = {
     d2REXGameType: 'REIGN_OF_THE_WARLOCK',
     d2REXPlatformType: 'PC',
@@ -306,12 +307,13 @@ async function lookupChaoscube(itemNameKo, ladder = false) {
     onSalesBasicStatus: 'IN_PROGRESS_SALE',
     pageable: { page: 0, size: 30 },
     sortable: { column: 'create_date', direction: 'DESC' },
-    socketCounts: [],
+    socketCounts: sockets ? [sockets] : [],
     keyword: itemNameKo,
   };
+  if (ethereal) searchConfig.isEthereal = true;
 
   // Step 1: Create search params → get binding key (with cache)
-  const cacheKey = `${itemNameKo}:${ladder}`;
+  const cacheKey = `${itemNameKo}:${ladder}:s${sockets || ''}:e${ethereal || ''}`;
   const cached = ccBindingCache.get(cacheKey);
   let bindingKey;
 

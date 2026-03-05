@@ -175,7 +175,7 @@ const STAT_PATTERNS = [
   { pattern: /민첩\s*[+*]\s*(\d+)/,                        key: 'dex',           label: 'Dexterity' },
   { pattern: /에너지\s*[+*]\s*(\d+)/,                      key: 'energy',        label: 'Energy' },
   // All Skills: 모든 기술/스킬 — OCR may garble 기술 as T=, 12, Td, NE
-  { pattern: /모[든는]\s*(?:스킬|기술|NE|T[=d]|[기ㄱ][술슬]|le|[|l]e)\s*[+*](\d+)/, key: 'allSkills', label: 'All Skills' },
+  { pattern: /(?:모[든는]\s*(?:스킬|기술|NE|T[=d]|[기ㄱ][술슬]|le|[|l]e)|ETE|모[든는]\s*le)\s*[+*](\d+)/, key: 'allSkills', label: 'All Skills' },
   // All Attributes: 모든 능력치 — OCR may render 치 as 지
   { pattern: /모든\s*능력[치지]\s*[+*](\d+)/,              key: 'allAttr',       label: 'All Attributes' },
   { pattern: /모든\s*저항\s*[+*](\d+)/,                    key: 'allRes',        label: 'All Resistances' },
@@ -394,6 +394,9 @@ export function parseItemText(text) {
     }
   }
 
+  // Detect ethereal
+  const ethereal = /무형/i.test(fullText);
+
   // Determine item quality
   if (itemNameEn) {
     itemQuality = 'unique'; // If we found a named item, it's likely unique
@@ -408,6 +411,7 @@ export function parseItemText(text) {
     baseTypeKo,
     baseTypeEn: cleanEn(baseTypeEn),
     itemQuality,
+    ethereal,
     stats,
     rawLines: lines
   };

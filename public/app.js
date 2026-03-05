@@ -140,6 +140,8 @@ identifyBtn.addEventListener('click', async () => {
         baseTypeEn: item.baseTypeEn,
         stats: item.stats,
         ladder: ladderToggle.checked,
+        ethereal: item.ethereal || false,
+        sockets: item.stats?.sockets?.value || null,
       }),
     });
     const priceData = await priceRes.json();
@@ -164,6 +166,10 @@ function renderItemInfo(item) {
   if (item.itemNameKo) {
     html += `<div class="item-name">${item.itemNameKo}</div>`;
     if (item.itemNameEn) html += `<div class="item-name-en">${item.itemNameEn}</div>`;
+  }
+
+  if (item.ethereal) {
+    html += `<div class="ethereal-badge">무형 (Ethereal)</div>`;
   }
 
   if (item.baseTypeKo) {
