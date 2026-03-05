@@ -708,6 +708,18 @@ function placeholderToStatKey(placeholder) {
   return null;
 }
 
+function formatPlaceholder(name) {
+  // Clean up D2Trader placeholder to readable short label
+  return name
+    .replace(/\+?\{[^}]*\}/g, '')
+    .replace(/\+?#/g, '')
+    .replace(/\(Based on Character Level\)/gi, '(레벨비례)')
+    .replace(/\s+/g, ' ')
+    .replace(/^\s*%?\s*/, '')
+    .replace(/\s*%?\s*$/, '')
+    .trim() || name;
+}
+
 /**
  * Compare user's item stats against local item DB ranges.
  * Returns stat quality comparison and perfect analysis.
@@ -775,16 +787,47 @@ function compareWithLocalDb(itemNameEn, userStats) {
   const avgQuality = Math.round(comparison.reduce((sum, c) => sum + c.quality, 0) / totalStats);
   const isPerfect = perfectCount === totalStats && totalStats > 0;
 
+  // Build full stat reference (fixed + variable) for "으뜸 스펙" display
+  const perfectSpec = [];
+  const hasVariableDefense = item.variableStats.some(s => placeholderToStatKey(s.name) === 'defense');
+
+  // Add base defense at top if variable and no variable defense in allStats
+  if (!hasVariableDefense) {
+    const baseDef = item.baseStats.find(s => s.name.startsWith('Defense'));
+    if (baseDef && baseDef.min !== baseDef.max) {
+      perfectSpec.push({
+        label: '방어력',
+        max: baseDef.max,
+        min: baseDef.min,
+        varies: true,
+        userValue: userStats.defense ? userStats.defense.value : null,
+      });
+    }
+  }
+
+  for (const s of item.allStats) {
+    const statKey = placeholderToStatKey(s.name);
+    const label = (statKey && STAT_LABELS[statKey]) || formatPlaceholder(s.name);
+    perfectSpec.push({
+      label,
+      max: s.max,
+      varies: s.varies,
+      userValue: statKey && userStats[statKey] ? userStats[statKey].value : null,
+    });
+  }
+
   return {
     comparison,
     perfectAnalysis: {
       itemName: itemNameEn,
       quality: item.quality,
+      baseName: item.baseName || null,
       isPerfect,
       avgQuality,
       perfectCount,
       totalStats,
       grade: isPerfect ? '으뜸' : avgQuality >= 90 ? '상' : avgQuality >= 70 ? '중상' : avgQuality >= 50 ? '중' : avgQuality >= 30 ? '중하' : '하',
+      perfectSpec,
     },
   };
 }

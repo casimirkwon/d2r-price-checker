@@ -280,25 +280,52 @@ function renderPriceInfo(data, itemName) {
     statComparison.classList.remove('hidden');
     let barsHtml = '';
 
-    // Perfect analysis summary
+    // Perfect analysis summary with 으뜸 스펙 popup
     if (pa) {
       const gradeClass = pa.isPerfect ? 'grade-perfect' : pa.avgQuality >= 90 ? 'grade-high' : pa.avgQuality >= 70 ? 'grade-mid' : 'grade-low';
+
+      // Build 으뜸 스펙 popup content
+      let specHtml = '';
+      if (pa.perfectSpec && pa.perfectSpec.length > 0) {
+        specHtml = pa.perfectSpec.map(s => {
+          const varies = s.varies;
+          const maxVal = s.max;
+          const userVal = s.userValue;
+          let valHtml;
+          if (!varies) {
+            valHtml = `<span class="spec-fixed">${maxVal}</span>`;
+          } else if (userVal != null && userVal >= maxVal) {
+            valHtml = `<span class="spec-perfect">${maxVal}</span>`;
+          } else if (userVal != null) {
+            valHtml = `<span class="spec-gap">${userVal}</span> / <span class="spec-max">${maxVal}</span>`;
+          } else {
+            valHtml = `<span class="spec-max">${maxVal}</span>`;
+          }
+          return `<div class="spec-row${varies ? ' spec-varies' : ''}">${escapeHtml(s.label)}: ${valHtml}</div>`;
+        }).join('');
+      }
+
+      const qualityLabel = pa.quality === 'unique' ? '유니크' : pa.quality === 'set' ? '세트' : pa.quality === 'runeword' ? '룬워드' : pa.quality;
+      const popupData = specHtml ? `data-popup="${escapeHtml(`<div class='popup-name'>${escapeHtml(pa.itemName)}</div>${pa.baseName ? `<div class='popup-base'>${escapeHtml(pa.baseName)} (${qualityLabel})</div>` : `<div class='popup-base'>${qualityLabel}</div>`}<div class='popup-divider'></div><div class='spec-title'>으뜸 스펙</div><div class='spec-list'>${specHtml}</div>`)}"` : '';
+
       barsHtml += `
-        <div class="perfect-analysis ${gradeClass}">
+        <div class="perfect-analysis ${gradeClass}" ${popupData}>
           <div class="grade-badge">${pa.grade}</div>
           <div class="grade-detail">
-            <span>평균 품질 <strong>${pa.avgQuality}%</strong></span>
-            <span>으뜸 ${pa.perfectCount}/${pa.totalStats}개</span>
+            <div class="grade-item-name">${escapeHtml(pa.itemName)}</div>
+            <span>평균 품질 <strong>${pa.avgQuality}%</strong> · 으뜸 ${pa.perfectCount}/${pa.totalStats}개</span>
           </div>
+          <div class="grade-hint">hover</div>
         </div>`;
     }
 
     for (const sc of data.statComparison) {
       const cls = sc.quality >= 100 ? 'perfect' : sc.quality >= 70 ? 'high' : sc.quality >= 40 ? 'mid' : 'low';
+      const diffText = sc.isPerfect ? '' : ` (으뜸까지 ${sc.max - sc.userValue > 0 ? '+' : ''}${sc.max - sc.userValue})`;
       barsHtml += `
         <div class="stat-bar-item">
           <div class="stat-bar-label">
-            <span>${sc.stat}: <strong>${sc.userValue}</strong>${sc.isPerfect ? ' (Perfect!)' : ''}</span>
+            <span>${sc.stat}: <strong>${sc.userValue}</strong>${sc.isPerfect ? ' <span class="perfect-tag">Perfect!</span>' : `<span class="diff-tag">${diffText}</span>`}</span>
             <span class="range">${sc.min} ~ ${sc.max}</span>
           </div>
           <div class="stat-bar">
@@ -307,6 +334,26 @@ function renderPriceInfo(data, itemName) {
         </div>`;
     }
     statBars.innerHTML = barsHtml;
+
+    // Attach popup to perfect-analysis box
+    const paBox = statBars.querySelector('.perfect-analysis[data-popup]');
+    if (paBox) {
+      const popup = document.getElementById('floatingPopup');
+      paBox.addEventListener('mouseenter', () => {
+        popup.innerHTML = paBox.dataset.popup;
+        popup.classList.remove('hidden');
+        const rect = paBox.getBoundingClientRect();
+        let left = rect.right + 8;
+        let top = rect.top;
+        if (left + 320 > window.innerWidth) left = rect.left - 328;
+        if (top + 300 > window.innerHeight) top = window.innerHeight - 310;
+        popup.style.left = left + 'px';
+        popup.style.top = top + 'px';
+      });
+      paBox.addEventListener('mouseleave', () => {
+        popup.classList.add('hidden');
+      });
+    }
   }
 
   // --- Trade history ---
